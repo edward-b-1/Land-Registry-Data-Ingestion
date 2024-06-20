@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import os
 
 from lib_land_registry_download.lib_db import PricePaidData
 
@@ -72,6 +73,11 @@ def format_dataframe(df: pandas.DataFrame):
 
 
 def main():
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
 
     limit=100000000
 
@@ -118,8 +124,8 @@ def main():
     print(df)
     print(df.columns)
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     query_string = text(
         f'''

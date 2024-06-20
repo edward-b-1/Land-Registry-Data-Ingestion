@@ -80,15 +80,16 @@ log.addHandler(file_log_handler)
 
 def main():
     log.info(f'{PROCESS_NAME} start')
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
 
     consumer = create_consumer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
         group_id=GROUP_ID,
     )
 
     producer = create_producer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
     )
 
@@ -217,13 +218,19 @@ def notify(producer: Producer, filename: str) -> None:
 
 
 def garbage_collect(producer: Producer) -> None:
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
+    # TODO: move
 
     now = datetime.now(timezone.utc)
     log.info(f'garbage_collect: now={now}')
 
-    url = 'postgresql://user:password@host/postgres'
+    #url = 'postgresql://user:password@host/postgres'
     log.debug(f'opening database session to {url}')
-    engine_postgres = create_engine(url)
+    engine_postgres = create_engine(postgres_connection_string)
 
     with Session(engine_postgres) as session:
 

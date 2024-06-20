@@ -96,6 +96,12 @@ def format_dataframe(df: pandas.DataFrame, datetime_now: datetime):
 
 
 def main():
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
+    # TODO: move
 
     args = parse_args()
     input_filename = parse_args_get_input_filename(args)
@@ -120,8 +126,8 @@ def main():
 
             df = format_dataframe(df, datetime_now)
 
-            url = 'postgresql://user:password@host/postgres'
-            engine_postgres = create_engine(url)
+            #url = 'postgresql://user:password@host/postgres'
+            engine_postgres = create_engine(postgres_connection_string)
 
             with engine_postgres.connect() as connection:
 

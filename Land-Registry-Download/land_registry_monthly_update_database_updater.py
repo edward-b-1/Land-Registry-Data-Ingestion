@@ -368,28 +368,28 @@ def main():
 
     log.info(f'process {PROCESS_NAME} started up')
 
-    kafka_bootstrap_server_address = f''
-    log.info(f'Kafka bootstrap server address: {kafka_bootstrap_server_address}')
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
+    log.info(f'Kafka bootstrap server address: {kafka_bootstrap_servers}')
 
     log.info(
         f'creating Kafka consumer with '
-        f'bootstrap_servers={kafka_bootstrap_server_address} '
+        f'bootstrap_servers={kafka_bootstrap_servers} '
         f'client_id={CLIENT_ID}, '
         f'group_id={GROUP_ID}'
     )
     consumer = create_consumer(
-        bootstrap_servers=kafka_bootstrap_server_address,
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
         group_id=GROUP_ID,
     )
 
     log.info(
         f'creating Kafka producer with '
-        f'bootstrap_servers={kafka_bootstrap_server_address} '
+        f'bootstrap_servers={kafka_bootstrap_servers} '
         f'client_id={CLIENT_ID}, '
     )
     producer = create_producer(
-        bootstrap_servers=kafka_bootstrap_server_address,
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
     )
 
@@ -815,9 +815,15 @@ def get_file_path(filename: str) -> str:
 
 
 def update_database(filename: str) -> tuple:
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
+    # TODO: move
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     with Session(engine_postgres) as session:
 

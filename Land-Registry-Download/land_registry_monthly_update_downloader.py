@@ -88,15 +88,16 @@ log.addHandler(file_log_handler)
 
 def main():
     log.info(f'{PROCESS_NAME} start')
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
 
     consumer = create_consumer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
         group_id=GROUP_ID,
     )
 
     producer = create_producer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
     )
 

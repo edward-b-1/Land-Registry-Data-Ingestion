@@ -26,6 +26,7 @@ from lib_land_registry_download.lib_db import PricePaidDataMonthlyUpdateFileLog
 
 import logging
 import sys
+import os
 
 from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION as PROCESS_NAME
 from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION as GROUP_ID
@@ -65,15 +66,16 @@ log.addHandler(file_log_handler)
 
 
 def main():
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
 
     consumer = create_consumer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
         group_id=GROUP_ID,
     )
 
     producer = create_producer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
     )
 
@@ -187,9 +189,15 @@ def consumer_poll_loop(consumer: Consumer) -> None:
 def data_decision(
     filename: str,
 ) -> str|None:
+    # TODO: move
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     with Session(engine_postgres) as session:
         rows = (
@@ -262,11 +270,17 @@ def notify(
 
 
 def update_database(filename: str, data_decision: str) -> bool:
-
     log.info(f'update_database: filename={filename}, data_decision={data_decision}')
+    
+    # TODO: move
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     with Session(engine_postgres) as session:
 
