@@ -73,6 +73,13 @@ Ideally, this should be run on Linux. You will also need:
 
 # Setup Instructions
 
+NOTE: The database and Kafka connection details will need to be added to the places in the executables where they have been removed. Search for:
+
+- `postgresql://user:password@host/postgres` and replace this connection string with the connection string for your database instance
+- `bootstrap_servers=f''`, `create_consumer`, `create_producer`, `kafka_bootstrap_server_address` to find all the places where the Kafka bootstrap server addresses must be added
+
+TODO: Pull these credentials from environment variables
+
 The requirements include Python, Pip and the `venv` Python module.
 
 ```
