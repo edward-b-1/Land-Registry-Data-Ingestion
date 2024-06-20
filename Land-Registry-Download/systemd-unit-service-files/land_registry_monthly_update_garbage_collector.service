@@ -8,6 +8,7 @@ Restart=always
 RestartSec=60
 User=propertyprice
 Group=propertyprice
+EnvironmentFile-=/etc/property_price_env
 WorkingDirectory=/var/log/property-price-land-registry-download
 StandardOutput=append:/var/log/property-price-land-registry-download/land_registry_monthly_update_garbage_collector.log
 StandardError=append:/var/log/property-price-land-registry-download/land_registry_monthly_update_garbage_collector.error.log
