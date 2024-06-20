@@ -1,0 +1,1 @@
+TUID,Price,Date,Postcode,PropertyType,New,Lease,PAON,SAON,Street,Locality,TownCity,District,County,PPDCat,RecordStatus

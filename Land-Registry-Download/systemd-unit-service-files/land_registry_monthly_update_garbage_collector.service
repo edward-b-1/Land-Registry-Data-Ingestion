@@ -1,0 +1,18 @@
+[Unit]
+Description=Land Registry Monthly Update Garbage Collector service
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=60
+User=propertyprice
+Group=propertyprice
+WorkingDirectory=/var/log/property-price-land-registry-download
+StandardOutput=append:/var/log/property-price-land-registry-download/land_registry_monthly_update_garbage_collector.log
+StandardError=append:/var/log/property-price-land-registry-download/land_registry_monthly_update_garbage_collector.error.log
+ExecStart=/usr/local/bin/property-price-land-registry-download/.venv/bin/python3 /usr/local/bin/property-price-land-registry-download/land_registry_monthly_update_garbage_collector.py
+ExecStop=/bin/kill -TERM $MAINPID
+
+[Install]
+WantedBy=land_registry_data.target
