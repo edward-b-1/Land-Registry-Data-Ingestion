@@ -64,7 +64,7 @@ Here is a list of database tables with some explanation as to their purpose:
 
 ## System Requirements
 
-Ideally, this should be run on Linux. You will also need:
+Ideally, this should be run on Linux. Systemd is used to manage processes, so while the code should run on any operating system (Python is cross platform) the install script will only work on Linux. You will also need:
 
 - a Kafka cluster (or single Kafka broker) for inter-process messaging and communication
 - a Postgres database
