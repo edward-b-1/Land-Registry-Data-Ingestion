@@ -4,14 +4,14 @@ Land Registry Data Ingestion System
 
 # What?
 
-This is a data ingestion system which downloads data from the Land Registry and ingests this data into a database. THe Land Registry dataset contains price paid data for properties sold in the UK.
+This is a data ingestion system which downloads data from the Land Registry and ingests this data into a database. The Land Registry dataset contains price paid data for properties sold in the UK.
 
 
 # Why?
 
 The easiest way to obtain the Land Registry data would be to simply download the complete file from the website. (`pp-complete.txt`) It would be relatively trivial to build a single process which simply downloads the data on a per-day or per-month basis. However, how would we implement such a data source with a database?
 
-The intention is to store this data in a PostgreSQL database such that it can be queried. This is useful, because often an analysis will focus on one category of data, for example data for flats or detached properties. A system which enables the data to by pulled from a source using SQL is desirable.
+The intention is to store this data in a PostgreSQL database such that it can be queried. This is useful, because often an analysis will focus on one category of data, for example data for flats or properties sold during a particular period of time. A system which enables the data to by pulled from a source using SQL is desirable.
 
 
 # How?
@@ -73,14 +73,15 @@ Ideally, this should be run on Linux. You will also need:
 
 # Setup Instructions
 
-NOTE: The database and Kafka connection details will need to be added to the places in the executables where they have been removed. Search for:
+The database and Kafka connection details need to be entered into the environments configuration file. This can be found in the `config` subdirectory.
 
-- `postgresql://user:password@host/postgres` and replace this connection string with the connection string for your database instance
-- `bootstrap_servers=f''`, `create_consumer`, `create_producer`, `kafka_bootstrap_server_address` to find all the places where the Kafka bootstrap server addresses must be added
+- `KAFKA_BOOTSTRAP_SERVERS`: Single string containing the Kafka Bootstrap Server addresses in the standard format accepted by Kafka
+- `POSTGRES_ADDRESS`: IP address of Postgres database
+- `POSTGRES_USER`: Postgres username, default `postgres`
+- `POSTGRES_PASSWORD`: Postgres password for user specified by `POSTGRES_USER`
+- `POSTGRES_DATABASE`: Postgres database name, default `postgres`
 
-TODO: Pull these credentials from environment variables
-
-The requirements include Python, Pip and the `venv` Python module.
+Installed software requirements include Python, Pip and the `venv` Python module.
 
 ```
 $ cd Land-Registry-Download
@@ -92,6 +93,13 @@ $ pip3 install -r requirements.txt
 ```
 
 The processes can then either be run individually, or you can run the installer script to install the whole system. This script will create required users, groups and setup systemd with scripts to run each process.
+
+# Installation
+
+```
+$ cd install
+$ sudo ./install.sh
+```
 
 TODO: add full SQL code requried for creation of the database tables
 
@@ -105,5 +113,5 @@ The subdirectories of this repository are described here:
 - `/install`: Contains installer bash script
 - `/lib_land_registry_download`: Python package (library) for common code required by each process
 - `/sql`: SQL scripts for database table creation
-- `/systemd-scripts`: Scripts for launching processes, used by systemd
+- `/systemd-scripts`: Helper scripts for systemd
 - `/systemd-unit-service-files`: Service files for systemd units, one for each process managed by systemd
