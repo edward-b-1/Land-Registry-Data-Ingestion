@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-
+import os
 import pandas
 from sqlalchemy import Connection
 from sqlalchemy import create_engine
@@ -8,11 +8,17 @@ from sqlalchemy import text
 
 
 def main():
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
+    # TODO: move
 
     #check_number_of_rows_in_dataframe_returned_by_database()
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     with engine_postgres.connect() as connection:
 
@@ -140,9 +146,15 @@ def get_transaction_unique_id_set(connection: Connection, table_name: str):
 
 # returns 28951515
 def check_number_of_rows_in_dataframe_returned_by_database():
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
+    # TODO: move
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     df = pandas.read_sql_table(
         table_name='price_paid_data',   # _raw

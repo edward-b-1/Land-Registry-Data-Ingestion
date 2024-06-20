@@ -31,15 +31,16 @@ event_thead_terminate = threading.Event()
 def main():
 
     PROCESS_NAME = 'daily_download_database_uploader'
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
 
     consumer = create_consumer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=PROCESS_NAME,
         group_id=PROCESS_NAME,
     )
 
     producer = create_producer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=PROCESS_NAME,
     )
 
@@ -164,9 +165,15 @@ def run_uploader(
 
 
 def update_database(df: pandas.DataFrame) -> None:
+    postgres_address = os.environ['POSTGRES_ADDRESS']
+    postgres_user = os.environ['POSTGRES_USER']
+    postgres_password = os.environ['POSTGRES_PASSWORD']
+    postgres_database = os.environ['POSTGRES_DATABASE']
+    postgres_connection_string = f'postgresql://{postgres_user}:{postgres_password}@{postgres_address}/{postgres_database}'
+    # TODO: move
 
-    url = 'postgresql://user:password@host/postgres'
-    engine_postgres = create_engine(url)
+    #url = 'postgresql://user:password@host/postgres'
+    engine_postgres = create_engine(postgres_connection_string)
 
     with engine_postgres.connect() as connection:
 
