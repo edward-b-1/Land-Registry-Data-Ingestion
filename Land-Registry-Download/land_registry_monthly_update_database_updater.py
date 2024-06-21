@@ -141,7 +141,7 @@ def log_delete_row(row) -> None:
 def add_row(
     session: Session,
     row,
-    datetime_now: datetime,
+    file_timestamp: datetime,
     input_file_statistics: InputFileStatistics,
 ):
     log_add_row(row)
@@ -166,7 +166,7 @@ def add_row(
         transaction_unique_id = row['transaction_unique_id']
         log.warning(f'row operation: ADD. (transaction_unique_id={transaction_unique_id}) row exists but column values differ, changing')
 
-        db_change_row(session, row, datetime_now=datetime_now)
+        db_change_row(session, row, file_timestamp=file_timestamp)
 
         ignore_row_count_insert = 1
         input_file_statistics.input_file_row_count_marked_as_add_but_changed += 1
@@ -195,7 +195,7 @@ def add_row(
         transaction_unique_id = row['transaction_unique_id']
         log.debug(f'row operation: ADD. (transaction_unique_id={transaction_unique_id})')
 
-        db_add_row(session, row, datetime_now)
+        db_add_row(session, row, file_timestamp)
 
         database_insert_row_count = 1
         input_file_statistics.input_file_row_count_marked_as_add_and_added += 1
@@ -211,7 +211,7 @@ def add_row(
 def change_row(
     session: Session,
     row,
-    datetime_now: datetime,
+    file_timestamp: datetime,
     input_file_statistics: InputFileStatistics,
 ):
     log_change_row(row)
@@ -235,7 +235,7 @@ def change_row(
         transaction_unique_id = row['transaction_unique_id']
         log.debug(f'row operation: CHANGE. (transaction_unique_id={transaction_unique_id})')
 
-        db_change_row(session, row, datetime_now)
+        db_change_row(session, row, file_timestamp)
 
         database_change_row_count = 1
         input_file_statistics.input_file_row_count_marked_as_change_and_changed += 1
@@ -251,7 +251,7 @@ def change_row(
         transaction_unique_id = row['transaction_unique_id']
         log.warning(f'row operation: CHANGE. (transaction_unique_id={transaction_unique_id}) row is missing, adding row')
 
-        db_add_row(session, row, datetime_now)
+        db_add_row(session, row, file_timestamp)
 
         database_insert_row_count = 1
         input_file_statistics.input_file_row_count_marked_as_change_but_missing_and_added += 1
@@ -279,7 +279,7 @@ def change_row(
 def delete_row(
     session: Session,
     row,
-    datetime_now: datetime,
+    file_timestamp: datetime,
     input_file_statistics: InputFileStatistics,
 ):
     log_delete_row(row)
@@ -296,7 +296,7 @@ def delete_row(
         transaction_unique_id = row['transaction_unique_id']
         log.debug(f'row operation: DELETE. (transaction_unique_id={transaction_unique_id})')
 
-        db_delete_row(session, row, datetime_now=datetime_now)
+        db_delete_row(session, row, file_timestamp=file_timestamp)
 
         database_delete_row_count = 1
         input_file_statistics.input_file_row_count_marked_as_delete_and_deleted += 1
@@ -305,8 +305,8 @@ def delete_row(
         transaction_unique_id = row['transaction_unique_id']
         log.warning(f'row operation: DELETE. (transaction_unique_id={transaction_unique_id}) row exists but column values differ, deleting')
 
-        db_change_row(session, row, datetime_now=datetime_now)
-        db_delete_row(session, row, datetime_now=datetime_now)
+        db_change_row(session, row, file_timestamp=file_timestamp)
+        db_delete_row(session, row, file_timestamp=file_timestamp)
 
         database_delete_row_count = 1
         input_file_statistics.input_file_row_count_marked_as_delete_but_not_identical_and_changed_and_deleted += 1
@@ -471,7 +471,7 @@ def run_process(
 
                             log.info(f'run_process: database update: filename={filename}')
 
-                            return_value = update_database(filename)
+                            return_value = update_database(filename, file_timestamp=dto.timestamp_download)
 
                             if return_value is None:
                                 pass
@@ -728,7 +728,7 @@ def check_row_exists_by_tuid_deleted(session: Session, row) -> bool:
 def db_add_row(
     session: Session,
     row,
-    datetime_now: datetime,
+    file_timestamp: datetime,
 ) -> None:
     # TODO: add a check for transaction_unique_id existing
     new_row = PricePaidData(
@@ -749,7 +749,7 @@ def db_add_row(
         ppd_cat=row['ppd_cat'],
         record_status=row['record_status'],
         is_deleted=False,
-        created_datetime=datetime_now,
+        created_datetime=file_timestamp,
         updated_datetime=None,
         deleted_datetime=None,
     )
@@ -760,7 +760,7 @@ def db_add_row(
 def db_change_row(
     session: Session,
     row,
-    datetime_now: datetime,
+    file_timestamp: datetime,
 ) -> None:
     existing_row = (
         session
@@ -784,14 +784,14 @@ def db_change_row(
     existing_row.county = row['county']
     existing_row.ppd_cat = row['ppd_cat']
     existing_row.record_status = row['record_status']
-    existing_row.updated_datetime = datetime_now
+    existing_row.updated_datetime = file_timestamp
     session.commit()
 
 
 def db_delete_row(
     session: Session,
     row,
-    datetime_now: datetime,
+    file_timestamp: datetime,
 ) -> None:
     existing_row = (
         session
@@ -801,7 +801,7 @@ def db_delete_row(
         .one()
     )
     existing_row.is_deleted = True
-    existing_row.deleted_datetime = datetime_now
+    existing_row.deleted_datetime = file_timestamp
     session.commit()
 
 
@@ -829,7 +829,10 @@ def get_file_path(filename: str) -> str:
     return f'{data_directory}/{filename}'
 
 
-def update_database(filename: str) -> tuple:
+def update_database(
+    filename: str,
+    file_timestamp: datetime,
+) -> tuple:
     postgres_address = os.environ['POSTGRES_ADDRESS']
     postgres_user = os.environ['POSTGRES_USER']
     postgres_password = os.environ['POSTGRES_PASSWORD']
@@ -948,7 +951,7 @@ def update_database(filename: str) -> tuple:
                         d = add_row(
                             session,
                             price_paid_data_monthly_update_row,
-                            datetime_now=datetime_now,
+                            file_timestamp=file_timestamp,
                             input_file_statistics=input_file_statistics,
                         )
                         if 'database_insert_row_count' in d: database_insert_row_count += d['database_insert_row_count']
@@ -963,7 +966,7 @@ def update_database(filename: str) -> tuple:
                         d = change_row(
                             session,
                             price_paid_data_monthly_update_row,
-                            datetime_now=datetime_now,
+                            file_timestamp=file_timestamp,
                             input_file_statistics=input_file_statistics,
                         )
                         if 'database_insert_row_count' in d: database_insert_row_count += d['database_insert_row_count']
@@ -978,7 +981,7 @@ def update_database(filename: str) -> tuple:
                         d = delete_row(
                             session,
                             price_paid_data_monthly_update_row,
-                            datetime_now=datetime_now,
+                            file_timestamp=file_timestamp,
                             input_file_statistics=input_file_statistics,
                         )
                         if 'database_insert_row_count' in d: database_insert_row_count += d['database_insert_row_count']
@@ -1030,7 +1033,7 @@ def update_database(filename: str) -> tuple:
                 session.add(price_paid_data_log_new_row)
                 session.commit()
 
-                log_message = f'updating row with filename {filename} to uploaded_datetime={datetime_now}'
+                log_message = f'updating row with filename {filename}, file timestamp {file_timestamp}, to uploaded_datetime={datetime_now}'
                 log.info(log_message)
 
                 price_paid_data_monthly_update_file_log_row.uploaded_datetime = datetime_now
