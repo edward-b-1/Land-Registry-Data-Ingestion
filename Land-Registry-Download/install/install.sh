@@ -109,6 +109,14 @@ for i in "${!SERVICE_FILE_NAMES[@]}"; do
     cp "$SERVICE_FILE_LOCAL_PATH_ROOT/$SERVICE_FILE_NAME" "$SYSTEMD_INSTALL_PATH_ROOT/"
 done
 
+# Create target.wants directory
+mkdir -p "$SYSTEMD_INSTALL_PATH_ROOT/$SERVICE_TARGET_FILE_NAME.wants"
+# Create symlinks for services
+for i in "${!SERVICE_FILE_NAMES[@]}"; do
+    SERVICE_FILE_NAME="${SERVICE_FILE_NAMES[$i]}"
+    ln -sf "$SYSTEMD_INSTALL_PATH_ROOT/$SERVICE_FILE_NAME" "$SYSTEMD_INSTALL_PATH_ROOT/$SERVICE_TARGET_FILE_NAME.wants/$SERVICE_FILE_NAME"
+done
+
 # Create log directory
 echo "create log directory $LOG_FILE_INSTALL_PATH_ROOT"
 mkdir -p "$LOG_FILE_INSTALL_PATH_ROOT"
