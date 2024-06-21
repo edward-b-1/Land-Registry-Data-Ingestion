@@ -20,7 +20,7 @@ The Land Registry publish the complete dataset `pp-complete.txt` each month. A m
 
 #### Why not just upload the complete dataset each month?
 
-This would be possible, but not particularly convenient. In particular, uploading the entire dataset takes about an hour, and the number of rows grows each month. While this would work, it would create a period of downtime where the data in the database is not accessible because it hsa been deleted pending the upload of a new dataset.
+This would be possible, but not particularly convenient. In particular, uploading the entire dataset takes about an hour, and the number of rows grows each month. While this would work, it would create a period of downtime where the data in the database is not accessible because it has been deleted pending the upload of a new dataset.
 
 For a personal project, this is not really a concern, however part of the purpose of this is to show an example of a production-grade system which could be used by analysts 24/7 without downtime.
 
