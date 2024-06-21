@@ -1,6 +1,8 @@
 [Unit]
 Description=Land Registry Monthly Update Garbage Collector service
 After=network.target
+PartOf=land_registry_data.target
+#Requires=land_registry_data.target
 
 [Service]
 Type=simple
