@@ -428,28 +428,28 @@ def run_process(
             # TODO: add expliclt handling for different types of error
             # then remove exception?
         else:
-            document = jsons.loads(
+            dto = jsons.loads(
                 message.value().decode(),
                 MonthlyUpdateDataDecisionCompleteNotificationDTO,
             )
 
             try:
-                notification_source = document.notification_source
+                notification_source = dto.notification_source
 
                 if (
                     notification_source == OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION or
                     notification_source == PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION
                 ):
-                    notification_type = document.notification_type
+                    notification_type = dto.notification_type
 
                     if notification_type == DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE:
 
                         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
                         thread_handle.start()
 
-                        filename = document.filename
-                        sha256sum = document.sha256sum
-                        decision = document.data_decision
+                        filename = dto.filename
+                        sha256sum = dto.sha256sum
+                        decision = dto.data_decision
                         log.info(f'processing message: filename={filename}, sha256sum={sha256sum}, decision={decision}')
                         assert len(sha256sum) > 0
 
@@ -460,8 +460,9 @@ def run_process(
                             notify_ignored(
                                 producer,
                                 filename,
-                                sha256sum=document.sha256sum,
-                                data_decision=document.data_decision,
+                                sha256sum=dto.sha256sum,
+                                data_decision=dto.data_decision,
+                                data_decision_dto=dto,
                             )
 
                         elif decision == 'processed':
@@ -490,8 +491,8 @@ def run_process(
                                 notify_processed(
                                     producer,
                                     filename,
-                                    sha256sum=document.sha256sum,
-                                    data_decision=document.data_decision,
+                                    sha256sum=dto.sha256sum,
+                                    data_decision=dto.data_decision,
                                     file_row_count=file_row_count,
                                     file_row_count_insert=file_row_count_insert,
                                     file_row_count_change=file_row_count_change,
@@ -542,12 +543,14 @@ def notify_ignored(
     filename: str,
     sha256sum: str,
     data_decision: str,
+    data_decision_dto: MonthlyUpdateDataDecisionCompleteNotificationDTO,
 ) -> None:
+    now = datetime.now(timezone.utc)
 
-    document = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
+    dto = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type=DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
         filename=filename,
         sha256sum=sha256sum,
         data_decision=data_decision,
@@ -557,9 +560,14 @@ def notify_ignored(
         file_row_count_delete=None,
         database_row_count_before=None,
         database_row_count_after=None,
+        timestamp_cron_trigger=data_decision_dto.timestamp_cron_trigger,
+        timestamp_download=data_decision_dto.timestamp_download,
+        timestamp_shasum=data_decision_dto.timestamp_shasum,
+        timestamp_data_decision=data_decision_dto.timestamp_data_decision,
+        timestamp_database_upload=None,
     )
 
-    document_json_str = jsons.dumps(document)
+    document_json_str = jsons.dumps(dto)
 
     producer.produce(
         topic=topic_name_land_registry_download_monthly_update_database_updater_notification,
@@ -581,12 +589,14 @@ def notify_processed(
     file_row_count_delete: int,
     database_row_count_before: int,
     database_row_count_after: int,
+    data_decision_dto: MonthlyUpdateDataDecisionCompleteNotificationDTO,
 ) -> None:
+    now = datetime.now(timezone.utc)
 
     document = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type='daily_download_monthly_update_database_update_complete',
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
         filename=filename,
         sha256sum=sha256sum,
         data_decision=data_decision,
@@ -596,6 +606,11 @@ def notify_processed(
         file_row_count_delete=file_row_count_delete,
         database_row_count_before=database_row_count_before,
         database_row_count_after=database_row_count_after,
+        timestamp_cron_trigger=data_decision_dto.timestamp_cron_trigger,
+        timestamp_download=data_decision_dto.timestamp_download,
+        timestamp_shasum=data_decision_dto.timestamp_shasum,
+        timestamp_data_decision=data_decision_dto.timestamp_data_decision,
+        timestamp_database_upload=now,
     )
 
     document_json_str = jsons.dumps(document)

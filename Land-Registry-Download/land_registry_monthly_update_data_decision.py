@@ -109,27 +109,27 @@ def run_process(
             log.error(log_message)
             raise RuntimeError(f'{message.value().decode()}')
         else:
-            document = jsons.loads(
+            dto = jsons.loads(
                 message.value().decode(),
                 MonthlyUpdateSHA256CalculationCompleteNotificationDTO,
             )
 
             try:
-                notification_source = document.notification_source
+                notification_source = dto.notification_source
 
                 if (
                     notification_source == OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_SHA256_CALCULATOR or
                     notification_source == PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_SHA256_CALCULATOR
                 ):
-                    notification_type = document.notification_type
+                    notification_type = dto.notification_type
 
                     if notification_type == DAILY_DOWNLOAD_MONTHLY_UPDATE_SHA256SUM_COMPLETE:
 
                         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
                         thread_handle.start()
 
-                        filename = document.filename
-                        sha256sum = document.sha256sum
+                        filename = dto.filename
+                        sha256sum = dto.sha256sum
                         assert len(sha256sum) > 0
                         print(f'run_process: data decision: filename={filename}')
 
@@ -149,7 +149,13 @@ def run_process(
                             'process': 'processed',
                         }
 
-                        notify(producer, filename, sha256sum, decision_map[decision])
+                        notify(
+                            producer=producer,
+                            filename=filename,
+                            sha256sum=sha256sum,
+                            data_decison=decision_map[decision],
+                            sha_calculation_dto=dto,
+                        )
 
                         event_thead_terminate.set()
                         thread_handle.join()
@@ -247,18 +253,24 @@ def notify(
     filename: str,
     sha256sum: str,
     data_decision: str,
+    sha_calculation_dto: MonthlyUpdateSHA256CalculationCompleteNotificationDTO,
 ) -> None:
+    now = datetime.now(timezone.utc)
 
-    document = MonthlyUpdateDataDecisionCompleteNotificationDTO(
+    data_decision_dto = MonthlyUpdateDataDecisionCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type=DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
         filename=filename,
         sha256sum=sha256sum,
         data_decision=data_decision,
+        timestamp_cron_trigger=sha_calculation_dto.timestamp_cron_trigger,
+        timestamp_download=sha_calculation_dto.timestamp_download,
+        timestamp_shasum=sha_calculation_dto.timestamp_shasum,
+        timestamp_data_decision=now,
     )
 
-    document_json_str = jsons.dumps(document)
+    document_json_str = jsons.dumps(data_decision_dto)
 
     producer.produce(
         topic=topic_name_land_registry_download_monthly_update_data_decision_notification,
@@ -271,7 +283,7 @@ def notify(
 
 def update_database(filename: str, data_decision: str) -> bool:
     log.info(f'update_database: filename={filename}, data_decision={data_decision}')
-    
+
     # TODO: move
     postgres_address = os.environ['POSTGRES_ADDRESS']
     postgres_user = os.environ['POSTGRES_USER']
@@ -307,7 +319,7 @@ def ctrl_c_signal_handler(signal, frame):
     print(f'wait for exit...')
     global exit_flag
     exit_flag = True
-    
+
 def sigterm_signal_handler(signal, frame):
     log.info(f'SIGTERM')
     global exit_flag

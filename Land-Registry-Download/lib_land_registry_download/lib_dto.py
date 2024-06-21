@@ -15,6 +15,8 @@ class CronTriggerNotificationDTO():
     notification_type: str
     timestamp: datetime
 
+    timestamp_cron_trigger: Optional[datetime]
+
 
 @dataclass
 class PPCompleteDownloadCompleteNotificationDTO():
@@ -26,7 +28,10 @@ class PPCompleteDownloadCompleteNotificationDTO():
     notification_source: str
     notification_type: str
     timestamp: datetime
-    filename: str # pass this on for GC
+    filename: str
+
+    timestamp_cron_trigger: Optional[datetime]
+    timestamp_complete_file_download: Optional[datetime]
 
 
 @dataclass
@@ -39,7 +44,10 @@ class MonthlyUpdateDownloadCompleteNotificationDTO():
     notification_source: str
     notification_type: str
     timestamp: datetime
-    filename: str # pass this on for GC
+    filename: str
+
+    timestamp_cron_trigger: Optional[datetime]
+    timestamp_download: Optional[datetime]
 
 
 @dataclass
@@ -53,6 +61,10 @@ class MonthlyUpdateSHA256CalculationCompleteNotificationDTO():
     timestamp: datetime # TODO: think this timestamp value is being set incorrectly? should have a file_timestamp and a message timestamp
     filename: str
     sha256sum: str
+
+    timestamp_cron_trigger: Optional[datetime]
+    timestamp_download: Optional[datetime]
+    timestamp_shasum: Optional[datetime]
 
 
 @dataclass
@@ -68,6 +80,11 @@ class MonthlyUpdateDataDecisionCompleteNotificationDTO():
     filename: str
     sha256sum: str
     data_decision: str
+
+    timestamp_cron_trigger: Optional[datetime]
+    timestamp_download: Optional[datetime]
+    timestamp_shasum: Optional[datetime]
+    timestamp_data_decision: Optional[datetime]
 
 
 @dataclass
@@ -90,6 +107,12 @@ class MonthlyUpdateDatabaseUpdateCompleteNotificationDTO():
     database_row_count_before: Optional[int]
     database_row_count_after: Optional[int]
 
+    timestamp_cron_trigger: Optional[datetime]
+    timestamp_download: Optional[datetime]
+    timestamp_shasum: Optional[datetime]
+    timestamp_data_decision: Optional[datetime]
+    timestamp_database_upload: Optional[datetime]
+
 
 @dataclass
 class MonthlyUpdateGarbageCollectorCompleteNotificationDTO():
@@ -106,3 +129,10 @@ class MonthlyUpdateGarbageCollectorCompleteNotificationDTO():
     notification_type: str
     timestamp: datetime
     filename: str
+
+    timestamp_cron_trigger: Optional[datetime]
+    timestamp_download: Optional[datetime]
+    timestamp_shasum: Optional[datetime]
+    timestamp_data_decision: Optional[datetime]
+    timestamp_database_upload: Optional[datetime]
+    timestamp_garbage_collect: Optional[datetime]

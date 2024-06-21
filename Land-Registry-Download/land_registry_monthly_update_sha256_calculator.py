@@ -160,7 +160,7 @@ def run_process(
                                     # this now can only happen if the hashlib algorithm fails, and does not raise
                                     # an exception
 
-                                notify(producer, filename, sha256sum)
+                                notify(producer, filename, sha256sum, document)
                             else:
                                 log_message = f'{datetime.now(timezone.utc)}: failed to calculate sha256sum of file {filename}'
                                 log.error(log_message)
@@ -236,14 +236,23 @@ def calculate_sha256sum(
     return None
 
 
-def notify(producer: Producer, filename: str, sha256sum: str) -> None:
+def notify(
+    producer: Producer,
+    filename: str,
+    sha256sum: str,
+    document: MonthlyUpdateDownloadCompleteNotificationDTO,
+) -> None:
+    now = datetime.now(timezone.utc)
 
     document = MonthlyUpdateSHA256CalculationCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type=DAILY_DOWNLOAD_MONTHLY_UPDATE_SHA256SUM_COMPLETE,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
         filename=filename,
         sha256sum=sha256sum,
+        timestamp_cron_trigger=document.timestamp_cron_trigger,
+        timestamp_download=document.timestamp_download,
+        timestamp_shasum=now,
     )
 
     document_json_str = jsons.dumps(document)
@@ -261,7 +270,7 @@ def update_database(producer: Producer, filename: str, sha256sum: str, timestamp
     log.info(
         f'update_database: filename={filename}, sha256sum={sha256sum}, timestamp={timestamp}'
     )
-    
+
     postgres_address = os.environ['POSTGRES_ADDRESS']
     postgres_user = os.environ['POSTGRES_USER']
     postgres_password = os.environ['POSTGRES_PASSWORD']
@@ -324,7 +333,7 @@ def ctrl_c_signal_handler(signal, frame):
     log.info(f'CTRL^C wait for exit...')
     global exit_flag
     exit_flag = True
-    
+
 def sigterm_signal_handler(signal, frame):
     log.info(f'SIGTERM')
     global exit_flag

@@ -157,10 +157,13 @@ def run_controller_process(producer: Producer, run_now: bool) -> None:
 
 def notify_trigger(producer: Producer) -> None:
 
+    now = datetime.now(timezone.utc)
+
     document = CronTriggerNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type=DAILY_DOWNLOAD_TRIGGER,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
+        timestamp_cron_trigger=now,
     )
 
     document_json_str = jsons.dumps(

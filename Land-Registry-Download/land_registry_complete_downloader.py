@@ -130,10 +130,17 @@ def process_message_queue(
                 thread_handle.start()
 
                 log.debug('run_download_process: run_download_and_notify')
-                run_download_return_value = run_download(producer)
+                run_download_return_value = run_download()
+
                 if run_download_return_value is not None:
-                    (filename, download_time) = run_download_return_value
-                    notify(producer, filename)
+                    (filename, download_timestamp, download_time) = run_download_return_value
+                    notify(
+                        producer,
+                        filename=filename,
+                        document=message,
+                        timestamp_complete_file_download=download_timestamp,
+                    )
+
                     log_message = f'{datetime.now(timezone.utc)}: finished downloading file: {filename} ({download_time})'
                     log.info(log_message)
                 else:
@@ -241,7 +248,7 @@ def consumer_poll_loop(consumer: Consumer) -> None:
     log.debug(f'consumer_poll_loop: consumer resumed')
 
 
-def run_download(producer: Producer) -> tuple[str, timedelta]|None:
+def run_download() -> tuple[str, datetime, timedelta]|None:
 
     def run_download_internal_logic() -> tuple[str|None, timedelta]:
         url = 'http://prod.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com/pp-complete.txt'
@@ -249,8 +256,7 @@ def run_download(producer: Producer) -> tuple[str, timedelta]|None:
         download_time_start = datetime.now(timezone.utc)
         log.info(f'run_download: {download_time_start}, download start url={url}')
 
-        filename = download_data(
-            producer,
+        (filename, download_timestamp) = download_data(
             url,
             get_filename(),
         )
@@ -258,13 +264,13 @@ def run_download(producer: Producer) -> tuple[str, timedelta]|None:
         download_time_end = datetime.now(timezone.utc)
         download_time = download_time_end - download_time_start
         log.info(f'run_download: download finished, time = {download_time}')
-        return (filename, download_time)
+        return (filename, download_timestamp, download_time)
 
     fail_count = 0
     while True:
-        (filename, download_time) = run_download_internal_logic()
+        (filename, download_timestamp, download_time) = run_download_internal_logic()
         if filename is not None:
-            return (filename, download_time)
+            return (filename, download_timestamp, download_time)
         else:
             fail_count += 1
             if fail_count > 20:
@@ -276,13 +282,20 @@ def run_download(producer: Producer) -> tuple[str, timedelta]|None:
             time.sleep(time_1_hour)
 
 
-def notify(producer: Producer, filename: str) -> None:
+def notify(
+    producer: Producer,
+    filename: str,
+    document: CronTriggerNotificationDTO,
+    timestamp_complete_file_download: datetime,
+) -> None:
 
     document = PPCompleteDownloadCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type=DAILY_DOWNLOAD_COMPLETE,
         filename=filename,
         timestamp=datetime.now(timezone.utc),
+        timestamp_cron_trigger=document.timestamp_cron_trigger,
+        timestamp_complete_file_download=timestamp_complete_file_download,
     )
 
     document_json_str = jsons.dumps(document)
@@ -328,9 +341,10 @@ def get_file_path(filename: str) -> str:
     return f'{data_directory}/{filename}'
 
 
-def download_data(producer: Producer, url: str, filename: str) -> str|None:
+def download_data(url: str, filename: str) -> tuple[str, datetime]|None:
 
-    log_message = f'{datetime.now(timezone.utc)}: download starting: {filename}, {url}'
+    download_timestamp = datetime.now(timezone.utc)
+    log_message = f'{download_timestamp}: download starting: {filename}, {url}'
     log.info(log_message)
 
     try:
@@ -362,7 +376,7 @@ def download_data(producer: Producer, url: str, filename: str) -> str|None:
     log_message = f'{datetime.now(timezone.utc)}: download complete: {filename}'
     log.info(log_message)
 
-    return filename
+    return (filename, download_timestamp)
 
 
 exit_flag = False

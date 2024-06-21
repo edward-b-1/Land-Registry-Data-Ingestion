@@ -124,20 +124,20 @@ def run_process(
             log.error(log_message)
             raise RuntimeError(f'{message.value().decode()}')
         else:
-            document = jsons.loads(
+            dto = jsons.loads(
                 message.value().decode(),
                 MonthlyUpdateDatabaseUpdateCompleteNotificationDTO,
             )
 
             try:
-                notification_source = document.notification_source
+                notification_source = dto.notification_source
                 log.debug(f'notification source: {notification_source}')
 
                 if (
                     notification_source == OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER or
                     notification_source == PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER
                 ):
-                    notification_type = document.notification_type
+                    notification_type = dto.notification_type
                     log.debug(f'notification type: {notification_type}')
 
                     if notification_type == DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE:
@@ -197,16 +197,27 @@ def get_file_path(filename: str) -> str:
     return f'{data_directory}/{filename}'
 
 
-def notify(producer: Producer, filename: str) -> None:
+def notify(
+    producer: Producer,
+    filename: str,
+    dto: MonthlyUpdateDatabaseUpdateCompleteNotificationDTO,
+) -> None:
+    now = datetime.now(timezone.utc)
 
-    document = MonthlyUpdateGarbageCollectorCompleteNotificationDTO(
+    gc_dto = MonthlyUpdateGarbageCollectorCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type=DAILY_DOWNLOAD_MONTHLY_UPDATE_GARBAGE_COLLECTION_COMPLETE,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=now,
         filename=filename,
+        timestamp_cron_trigger=dto.timestamp_cron_trigger,
+        timestamp_download=dto.timestamp_download,
+        timestamp_shasum=dto.timestamp_shasum,
+        timestamp_data_decision=dto.timestamp_data_decision,
+        timestamp_database_upload=dto.timestamp_database_upload,
+        timestamp_garbage_collect=now,
     )
 
-    document_json_str = jsons.dumps(document)
+    document_json_str = jsons.dumps(gc_dto)
 
     producer.produce(
         topic=topic_name_land_registry_download_monthly_update_garbage_collector_notification,
@@ -217,7 +228,11 @@ def notify(producer: Producer, filename: str) -> None:
     producer.flush()
 
 
-def garbage_collect(producer: Producer) -> None:
+def garbage_collect(
+    producer: Producer,
+    dto: MonthlyUpdateDatabaseUpdateCompleteNotificationDTO,
+) -> None:
+
     postgres_address = os.environ['POSTGRES_ADDRESS']
     postgres_user = os.environ['POSTGRES_USER']
     postgres_password = os.environ['POSTGRES_PASSWORD']
@@ -229,7 +244,7 @@ def garbage_collect(producer: Producer) -> None:
     log.info(f'garbage_collect: now={now}')
 
     #url = 'postgresql://user:password@host/postgres'
-    log.debug(f'opening database session to {url}')
+    log.debug(f'opening database session to {postgres_connection_string}')
     engine_postgres = create_engine(postgres_connection_string)
 
     with Session(engine_postgres) as session:
@@ -273,7 +288,7 @@ def garbage_collect(producer: Producer) -> None:
                         raise PathIsNotAFileError(file_path, log_message)
 
                     os.remove(file_path)
-                    notify(producer, filename)
+                    notify(producer, filename, dto)
                 else:
                     log.info(f'ignore file: {filename}, age: {file_age}')
             else:
@@ -286,7 +301,7 @@ def ctrl_c_signal_handler(signal, frame):
     log.info(f'CTRL^C wait for exit...')
     global exit_flag
     exit_flag = True
-    
+
 def sigterm_signal_handler(signal, frame):
     log.info(f'SIGTERM')
     global exit_flag
