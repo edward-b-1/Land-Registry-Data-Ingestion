@@ -4,6 +4,7 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
+import os
 import jsons
 import signal
 import argparse
@@ -96,10 +97,12 @@ def parse_arguments() -> str:
 
 
 def main():
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
+
     run_now = parse_arguments()
 
     producer = create_producer(
-        bootstrap_servers=f'',
+        bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
     )
 
@@ -173,7 +176,7 @@ def ctrl_c_signal_handler(signal, frame):
     print(f'wait for exit...')
     global exit_flag
     exit_flag = True
-    
+
 def sigterm_signal_handler(signal, frame):
     log.info(f'SIGTERM')
     global exit_flag
