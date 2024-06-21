@@ -11,7 +11,7 @@ This is a data ingestion system which downloads data from the Land Registry and 
 
 The easiest way to obtain the Land Registry data would be to simply download the complete file from the website. (`pp-complete.txt`) It would be relatively trivial to build a single process which simply downloads the data on a per-day or per-month basis. However, how would we implement such a data source with a database?
 
-The intention is to store this data in a PostgreSQL database such that it can be queried. This is useful, because often an analysis will focus on one category of data, for example data for flats or properties sold during a particular period of time. A system which enables the data to by pulled from a source using SQL is desirable.
+The intention is to store this data in a PostgreSQL database such that it can be queried. The alternative would be to build an analysis code which starts by loading the entire file from disk into a Pandas dataframe. This is not only slow, but consumes significant quantities of memory. Storing the data in a queryable database is useful as often an analysis will focus on one category of data, for example data for flats or properties sold during a particular period of time. Therefore this system is designed to ingest data to a SQL database.
 
 
 # How?
