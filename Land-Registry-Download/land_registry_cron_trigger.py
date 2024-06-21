@@ -97,15 +97,22 @@ def parse_arguments() -> str:
 
 
 def main():
-    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
+    log.info(f'{PROCESS_NAME} start')
 
+    log.info(f'read environment variables')
+    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
+    log.info(f'env: KAFKA_BOOTSTRAP_SERVERS={kafka_bootstrap_servers}')
+
+    log.info(f'parse arguments')
     run_now = parse_arguments()
 
+    log.info(f'create producer')
     producer = create_producer(
         bootstrap_servers=kafka_bootstrap_servers,
         client_id=CLIENT_ID,
     )
 
+    log.info(f'run controller process')
     run_controller_process(producer, run_now)
 
 

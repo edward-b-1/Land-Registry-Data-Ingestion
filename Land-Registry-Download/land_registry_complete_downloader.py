@@ -371,7 +371,7 @@ def ctrl_c_signal_handler(signal, frame):
     log.info(f'CTRL^C wait for exit...')
     global exit_flag
     exit_flag = True
-    
+
 def sigterm_signal_handler(signal, frame):
     log.info(f'SIGTERM')
     global exit_flag
