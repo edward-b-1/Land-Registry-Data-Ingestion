@@ -35,7 +35,7 @@ def main():
         result = connection.execute(query_string, query_params)
 
         for item in result:
-            print(f'{item[0]}: {item[1]}')
+            print(f'{item[0]} / {item[1]}')
 
 
     print(f'connecting to postgres database')
@@ -56,7 +56,10 @@ def main():
         result = connection.execute(query_string, query_params)
 
         for item in result:
-            print(f'{item[0]}: {item[1]}')
+            print(f'{item[0]} / {item[1]}')
+
+
+    return
 
 
     # fix the data using the sqlite3 data as input
