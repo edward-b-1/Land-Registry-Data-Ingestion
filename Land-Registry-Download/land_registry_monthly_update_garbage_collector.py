@@ -149,7 +149,7 @@ def run_process(
                         try:
                             # new notification documents just trigger the garbage collection
                             # process for all old files
-                            garbage_collect(producer=producer)
+                            garbage_collect(producer=producer, dto=dto)
 
                         except FileNotFoundError as exception:
                             log.error(str(exception))
