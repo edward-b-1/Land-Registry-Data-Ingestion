@@ -153,7 +153,7 @@ def run_process(
                             producer=producer,
                             filename=filename,
                             sha256sum=sha256sum,
-                            data_decison=decision_map[decision],
+                            data_decision=decision_map[decision],
                             sha_calculation_dto=dto,
                         )
 
