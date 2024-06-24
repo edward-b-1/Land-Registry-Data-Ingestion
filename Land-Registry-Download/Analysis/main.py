@@ -56,9 +56,11 @@ def main():
     print(df.dtypes)
 
     df['delay_days'] = df['created_datetime_transaction_date_delay'].dt.days
+    df['delay_weeks'] = df['delay_days'] // 7
 
     print(df.head())
 
+    #
     fig, ax = plt.subplots(1)
 
     ax.hist(
@@ -68,6 +70,8 @@ def main():
     fig.savefig('delay_days.png')
     fig.savefig('delay_days.pdf')
 
+
+    #
     df = df[df['delay_days'] < 1000]
 
     fig, ax = plt.subplots(1)
@@ -78,6 +82,29 @@ def main():
     )
     fig.savefig('delay_days_lt_1000.png')
     fig.savefig('delay_days_lt_1000.pdf')
+
+
+    #
+    df = df[df['delay_days'] < 360]
+
+    fig, ax = plt.subplots(1)
+
+    ax.hist(
+        df['delay_days'],
+        bins=360,
+    )
+    fig.savefig('delay_days_lt_360.png')
+    fig.savefig('delay_days_lt_360.pdf')
+
+    #
+    fig, ax = plt.subplots(1)
+
+    ax.hist(
+        df['delay_weeks'],
+        bins=52,
+    )
+    fig.savefig('delay_days_lt_360_weeks.png')
+    fig.savefig('delay_days_lt_360_weeks.pdf')
 
 
 
