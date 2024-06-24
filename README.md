@@ -16,7 +16,7 @@ The intention is to store this data in a PostgreSQL database such that it can be
 
 # How?
 
-The Land Registry publish the complete dataset `pp-complete.txt` each month. A monthly update dataset is also published. This dataset contains a list of rows to insert, modify or delete. By applying these operations on a monthly basis, the complete data can be maintained across time.
+The Land Registry publish the complete dataset `pp-complete.txt` each month. A monthly update dataset is also published. The monthly update dataset contains a list of rows to insert, modify or delete. By applying these operations to an existing database, the complete data can be maintained across time.
 
 #### Why not just upload the complete dataset each month?
 
@@ -28,19 +28,19 @@ There is also another more important point. Data from the Land Registry is publi
 
 From a practical standpoint of performing data analysis, there is no certain way to know as to what date data can be considered "reliable" or "mostly complete". Put another way, if the complete data file were to be downloaded on the 2024-07-01, there would likely be transactions for all (working) days before this date. However, if the data file is downloaded the next month, it is usually the case that a significant number of new rows will appear for transaction dates prior to 2024-07-01.
 
-It is only by recording information about the date when data becomes available that an analysis can be performed to measure the expected distribution of delay times between a reported transaction date, and the data becoming available in the downloaded file. The file only contains transaction dates. It does not declare when any particular row of data was added. This is the primary reason why I built this system.
+It is only by recording information about the date when data becomes available that an analysis can be performed to measure the expected distribution of delay times between a reported transaction date, and the data becoming available in the file downloaded from the Land Registry. The Land Registry data only contains transaction dates. It does not declare when any particular row of data was added. This is the primary reason why I built this system.
 
-The following figures may help to explain this concept in more detail:
+**The following figures may help to explain this concept in more detail:**
 
-The first figure shows the count of the number of properties by *delay time*. Delay time is defined as the number of days between the data on which the dataset was published and the transaction date.
+The first figure shows the count of the number of properties by *delay time*. Delay time is defined as the number of days between the date on which the dataset was published and the transaction date.
 
 ![Count of number of properties by measured delay time](image/normalized_delay_count.png)
 
-At the time of writing, the first captured publish date was 2023-09-10. This date does not co-incide with a scheduled release date for the data. The next captured publish date was 2023-09-29. When the data was downloaded on this date, new rows appeared for the month of September. These new rows were not present in the previously downloaded file. Therefore, from this date onwards, it is possible to measure the delay time between a transaction occuring (transaction date value of a row) and rows appearing in the published dataset. (This is not known exactly but approximated. The monthly release schedule is known, and by downloading the data each day it is possible to record a "created datetime" for each row.)
+At the time of writing, the first captured publish date was 2023-09-10. This date does not co-incide with a scheduled release date for the data. The next captured publish date was 2023-09-29, which is a scheduled monthly release date. When the data was downloaded on 29th September, new rows appeared for the month of September. These new rows were not present in the previously downloaded file, downloaded on 10th September. Therefore, from 2024-09-29 onwards, it is possible to measure the delay time between a transaction occuring (transaction date value of a row) and rows appearing in the published dataset. (This is not known exactly but approximated. The monthly release schedule is known, and by downloading the data each day it is possible to record a "created datetime" for each row.)
 
-Note that data beyond approximately 250 days is not valid, as this corresponds to a transaction date of before September 2023.
+Note that data shown in the figure beyond approximately 250 days is not valid, as this corresponds to a transaction date of before September 2023.
 
-The data suggests that a significant number of transactions are delayed by more than 9 months.
+The figure suggests that a significant number of transactions are delayed by more than 9 months.
 
 The housing market data contains significant seasonal effects, as more properties are sold during the spring and less are sold in the first few months of the year. It is difficult to account for seasonal effects.
 
