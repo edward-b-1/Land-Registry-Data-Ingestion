@@ -1,6 +1,20 @@
 # Land-Registry-Data-Ingestion
 Land Registry Data Ingestion System
 
+## Technology List
+
+- Kafka
+- Postgres
+- Python
+- Jypyter
+- Pandas
+- Threading, multithread processing, inter-thread signals
+- sqlalchemy
+- sqlite3 (sort of)
+- CRON (from within Python)
+- systemd, Linux
+- Python logging framework
+
 
 # What?
 
