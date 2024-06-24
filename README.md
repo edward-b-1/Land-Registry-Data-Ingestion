@@ -20,7 +20,7 @@ The Land Registry publish the complete dataset `pp-complete.txt` each month. A m
 
 #### Why not just upload the complete dataset each month?
 
-This would be possible, but not particularly convenient. In particular, uploading the entire dataset takes about an hour, and the number of rows grows each month. While this would work, it would create a period of downtime where the data in the database is not accessible because it has been deleted pending the upload of a new dataset.
+This would be possible, but not particularly convenient. In particular, uploading the entire dataset takes about an hour, and the number of rows grows each month. While this method would work, it would create a period of downtime where the data in the database is not accessible because it has been deleted pending the upload of a new dataset.
 
 For a personal project, this is not really a concern, however part of the purpose of this is to show an example of a production-grade system which could be used by analysts 24/7 without downtime.
 
@@ -29,6 +29,24 @@ There is also another more important point. Data from the Land Registry is publi
 From a practical standpoint of performing data analysis, there is no certain way to know as to what date data can be considered "reliable" or "mostly complete". Put another way, if the complete data file were to be downloaded on the 2024-07-01, there would likely be transactions for all (working) days before this date. However, if the data file is downloaded the next month, it is usually the case that a significant number of new rows will appear for transaction dates prior to 2024-07-01.
 
 It is only by recording information about the date when data becomes available that an analysis can be performed to measure the expected distribution of delay times between a reported transaction date, and the data becoming available in the downloaded file. The file only contains transaction dates. It does not declare when any particular row of data was added. This is the primary reason why I built this system.
+
+The following figures may help to explain this concept in more detail:
+
+The first figure shows the count of the number of properties by *delay time*. Delay time is defined as the number of days between the data on which the dataset was published and the transaction date.
+
+![Count of number of properties by measured delay time](image/normalized_delay_count.png)
+
+At the time of writing, the first captured publish date was 2023-09-10. This date does not co-incide with a scheduled release date for the data. The next captured publish date was 2023-09-29. When the data was downloaded on this date, new rows appeared for the month of September. These new rows were not present in the previously downloaded file. Therefore, from this date onwards, it is possible to measure the delay time between a transaction occuring (transaction date value of a row) and rows appearing in the published dataset. (This is not known exactly but approximated. The monthly release schedule is known, and by downloading the data each day it is possible to record a "created datetime" for each row.)
+
+Note that data beyond approximately 250 days is not valid, as this corresponds to a transaction date of before September 2023.
+
+The data suggests that a significant number of transactions are delayed by more than 9 months.
+
+The housing market data contains significant seasonal effects, as more properties are sold during the spring and less are sold in the first few months of the year. It is difficult to account for seasonal effects.
+
+The data shown in the below figure is corrected for daily transaction volume by producing a weight which is inversely proportional to the number of transactions which occur each day. This corrects for bias in the above figure caused by variations in the number of sales across time. As an additional bonus, since there are a large number of rows with transaction dates before September 2023, these rows have very small associated weights. The result is that data older than September 2023 is diminished in the normalized figure.
+
+![Normalized distribution of properties by measured delay time](image/normalized_delay_weight.png)
 
 
 # System Archetecture
