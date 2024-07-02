@@ -6,6 +6,8 @@ from sqlalchemy.orm import DeclarativeBase
 
 from datetime import datetime
 
+from typing import Optional
+
 
 class LandRegistryBase(DeclarativeBase):
     __table_args__ = {'schema': 'land_registry'}
@@ -34,8 +36,9 @@ class PricePaidData(LandRegistryBase):
     record_status: Mapped[str]
     is_deleted: Mapped[str]
     created_datetime: Mapped[datetime]
-    updated_datetime: Mapped[datetime]
-    deleted_datetime: Mapped[datetime]
+    updated_datetime: Mapped[Optional[datetime]]
+    deleted_datetime: Mapped[Optional[datetime]]
+    created_datetime_original: Mapped[Optional[datetime]]
 
 
 class PricePaidDataLog(LandRegistryBase):

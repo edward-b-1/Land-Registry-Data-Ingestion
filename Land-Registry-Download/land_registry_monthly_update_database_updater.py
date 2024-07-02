@@ -752,6 +752,7 @@ def db_add_row(
         created_datetime=file_timestamp,
         updated_datetime=None,
         deleted_datetime=None,
+        created_datetime_original=None,
     )
     session.add(new_row)
     session.commit()
