@@ -62,8 +62,10 @@ class InputFileStatistics:
     input_file_row_count_marked_as_add_but_already_identical_and_ignored: int
     # number of rows marked to be added which tuid existed, but data was not correct so was changed
     input_file_row_count_marked_as_add_but_changed: int
-    # number of rows marked to be added which tuid exists but is marked as deleted
+    # number of rows marked to be added which tuid exists but is marked as deleted [no longer in use]
     input_file_row_count_marked_as_add_but_deleted_and_ignored: int
+    # number of rows marked to be added which tuid exists but is marked as deleted [in this case, interpret as a change operation]
+    input_file_row_count_marked_as_add_but_deleted_and_changed: int
 
     # number of rows marked to be changed, which tuid existed but data was different so changed
     input_file_row_count_marked_as_change_and_changed: int
@@ -147,6 +149,7 @@ def add_row(
     log_add_row(row)
 
     ignore_row_count_insert = None
+    database_change_row_count = None
     database_insert_row_count = None
 
     # this logic should only be required for the first month because the database
@@ -173,10 +176,15 @@ def add_row(
 
     elif check_row_exists_by_tuid_deleted(session, row):
         transaction_unique_id = row['transaction_unique_id']
-        log.warning(f'row operation: ADD. (transaction_unique_id={transaction_unique_id}) row exists but marked as deleted, ignoring')
+        #log.warning(f'row operation: ADD. (transaction_unique_id={transaction_unique_id}) row exists but marked as deleted, ignoring')
+        log.warning(f'row operation: ADD. (transaction_unique_id={transaction_unique_id}) row exists but marked as deleted, interpreting as UNDELETE followed by CHANGE')
 
-        ignore_row_count_insert = 1
-        input_file_statistics.input_file_row_count_marked_as_add_but_deleted_and_ignored += 1
+        db_undelete_row(session, row)
+        db_change_row(session, row, file_timestamp=file_timestamp)
+
+        #ignore_row_count_insert = 1
+        database_change_row_count = 1
+        input_file_statistics.input_file_row_count_marked_as_add_but_deleted_and_changed += 1
 
     # end of additional logic
 
@@ -205,6 +213,8 @@ def add_row(
         d['ignore_row_count_insert'] = ignore_row_count_insert
     if database_insert_row_count is not None:
         d['database_insert_row_count'] = database_insert_row_count
+    if database_change_row_count is not None:
+        d['database_change_row_count'] = database_change_row_count
     return d
 
 
@@ -428,28 +438,28 @@ def run_process(
             # TODO: add expliclt handling for different types of error
             # then remove exception?
         else:
-            dto = jsons.loads(
+            data_decision_dto = jsons.loads(
                 message.value().decode(),
                 MonthlyUpdateDataDecisionCompleteNotificationDTO,
             )
 
             try:
-                notification_source = dto.notification_source
+                notification_source = data_decision_dto.notification_source
 
                 if (
                     notification_source == OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION or
                     notification_source == PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION
                 ):
-                    notification_type = dto.notification_type
+                    notification_type = data_decision_dto.notification_type
 
                     if notification_type == DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE:
 
                         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
                         thread_handle.start()
 
-                        filename = dto.filename
-                        sha256sum = dto.sha256sum
-                        decision = dto.data_decision
+                        filename = data_decision_dto.filename
+                        sha256sum = data_decision_dto.sha256sum
+                        decision = data_decision_dto.data_decision
                         log.info(f'processing message: filename={filename}, sha256sum={sha256sum}, decision={decision}')
                         assert len(sha256sum) > 0
 
@@ -460,9 +470,9 @@ def run_process(
                             notify_ignored(
                                 producer,
                                 filename,
-                                sha256sum=dto.sha256sum,
-                                data_decision=dto.data_decision,
-                                data_decision_dto=dto,
+                                sha256sum=data_decision_dto.sha256sum,
+                                data_decision=data_decision_dto.data_decision,
+                                data_decision_dto=data_decision_dto,
                             )
 
                         elif decision == 'processed':
@@ -471,7 +481,7 @@ def run_process(
 
                             log.info(f'run_process: database update: filename={filename}')
 
-                            return_value = update_database(filename, file_timestamp=dto.timestamp_download)
+                            return_value = update_database(filename, file_timestamp=data_decision_dto.timestamp_download)
 
                             if return_value is None:
                                 pass
@@ -491,14 +501,15 @@ def run_process(
                                 notify_processed(
                                     producer,
                                     filename,
-                                    sha256sum=dto.sha256sum,
-                                    data_decision=dto.data_decision,
+                                    sha256sum=data_decision_dto.sha256sum,
+                                    data_decision=data_decision_dto.data_decision,
                                     file_row_count=file_row_count,
                                     file_row_count_insert=file_row_count_insert,
                                     file_row_count_change=file_row_count_change,
                                     file_row_count_delete=file_row_count_delete,
                                     database_row_count_before=database_row_count_before,
                                     database_row_count_after=database_row_count_after,
+                                    data_decision_dto=data_decision_dto,
                                 )
 
                         event_thead_terminate.set()
@@ -593,7 +604,7 @@ def notify_processed(
 ) -> None:
     now = datetime.now(timezone.utc)
 
-    document = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
+    database_update_complete_notification_dto = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
         notification_source=PROCESS_NAME,
         notification_type='daily_download_monthly_update_database_update_complete',
         timestamp=now,
@@ -613,7 +624,7 @@ def notify_processed(
         timestamp_database_upload=now,
     )
 
-    document_json_str = jsons.dumps(document)
+    document_json_str = jsons.dumps(database_update_complete_notification_dto)
 
     producer.produce(
         topic=topic_name_land_registry_download_monthly_update_database_updater_notification,
@@ -805,6 +816,23 @@ def db_delete_row(
     session.commit()
 
 
+def db_undelete_row(
+    session: Session,
+    row,
+    #file_timestamp: datetime,
+) -> None:
+    existing_row = (
+        session
+        .query(PricePaidData)
+        .filter_by(transaction_unique_id=row['transaction_unique_id'])
+        .filter_by(is_deleted=True)
+        .one()
+    )
+    existing_row.is_deleted = False
+    #existing_row.deleted_datetime = file_timestamp
+    session.commit()
+
+
 # def db_delete_row_if_tuid_exists(session: Session, row, datetime_now: datetime) -> bool:
 
 #     existing_row = (
@@ -905,6 +933,7 @@ def update_database(
                     input_file_row_count_marked_as_add_but_already_identical_and_ignored=0,
                     input_file_row_count_marked_as_add_but_changed=0,
                     input_file_row_count_marked_as_add_but_deleted_and_ignored=0,
+                    input_file_row_count_marked_as_add_but_deleted_and_changed=0,
                     input_file_row_count_marked_as_change_and_changed=0,
                     input_file_row_count_marked_as_change_but_already_identical_and_ignored=0,
                     input_file_row_count_marked_as_change_but_missing_and_added=0,
@@ -1047,7 +1076,8 @@ def update_database(
                 )
                 total_update = (
                     input_file_statistics.input_file_row_count_marked_as_add_but_changed +
-                    input_file_statistics.input_file_row_count_marked_as_change_and_changed
+                    input_file_statistics.input_file_row_count_marked_as_change_and_changed +
+                    input_file_statistics.input_file_row_count_marked_as_add_but_deleted_and_changed
                 )
                 total_delete = (
                     input_file_statistics.input_file_row_count_marked_as_delete_and_deleted +
@@ -1075,7 +1105,10 @@ def update_database(
                         operation_count_delete=total_delete,
                         operation_count_ignored=total_ignore,
                         operation_count_insert_insert=input_file_statistics.input_file_row_count_marked_as_add_and_added,
-                        operation_count_insert_update=input_file_statistics.input_file_row_count_marked_as_add_but_changed,
+                        operation_count_insert_update=(
+                            input_file_statistics.input_file_row_count_marked_as_add_but_changed +
+                            input_file_statistics.input_file_row_count_marked_as_add_but_deleted_and_changed
+                        ),
                         operation_count_insert_ignore=(
                             input_file_statistics.input_file_row_count_marked_as_add_but_already_identical_and_ignored +
                             input_file_statistics.input_file_row_count_marked_as_add_but_deleted_and_ignored
