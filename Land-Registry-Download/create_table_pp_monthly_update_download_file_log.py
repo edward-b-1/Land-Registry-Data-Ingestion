@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import text
 from lib_land_registry_data.lib_db import LandRegistryBase
 
+# TODO: use env file
 url = 'postgresql://postgres:adminpassword@192.168.0.232/postgres'
 engine = create_engine(url)
 
