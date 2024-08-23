@@ -1,0 +1,30 @@
+
+name: land-registry-data-project
+
+services:
+    land_registry_cron_trigger:
+        container_name: land_registry_cron_trigger
+        image: example/land_registry_cron_trigger:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_cron_trigger/Dockerfile
+        restart: no
+        
+    land_registry_pp_monthly_update_download_service:
+        container_name: land_registry_pp_monthly_update_download_service
+        image: example/land_registry_pp_monthly_update_download_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_monthly_update_download_service/Dockerfile
+        restart: no
+        
+    land_registry_pp_complete_download_service:
+        container_name: land_registry_pp_complete_download_service
+        image: example/land_registry_pp_complete_download_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_download_service/Dockerfile
+        restart: no

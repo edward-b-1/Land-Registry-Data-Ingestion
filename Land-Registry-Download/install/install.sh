@@ -57,7 +57,7 @@ BINARY_INSTALL_PATH_ROOT="/usr/local/bin/$APPLICATION_GROUP_NAME"
 SYSTEMD_INSTALL_PATH_ROOT="/etc/systemd/system"
 LOG_FILE_INSTALL_PATH_ROOT="/var/log/$APPLICATION_GROUP_NAME"
 CONFIGURATION_FILE_INSTALL_PATH_ROOT="/etc"
-CONFIGURATION_FILE_NAME="property_price_env"
+CONFIGURATION_FILE_NAME="land_registry_data.env"
 
 BINARY_LOCAL_PATH_ROOT=".."
 SERVICE_FILE_LOCAL_PATH_ROOT="../systemd-unit-service-files"
@@ -78,7 +78,7 @@ mkdir -p "$BINARY_INSTALL_PATH_ROOT"
 # Copy library dependencies
 echo "copy library dependencies"
 cp "$BINARY_LOCAL_PATH_ROOT/requirements.txt" "$BINARY_INSTALL_PATH_ROOT/"
-cp -r "$BINARY_LOCAL_PATH_ROOT/lib_land_registry_download" "$BINARY_INSTALL_PATH_ROOT/"
+cp -r "$BINARY_LOCAL_PATH_ROOT/lib_land_registry_data" "$BINARY_INSTALL_PATH_ROOT/"
 pushd "$BINARY_INSTALL_PATH_ROOT"
 python3 -m venv .venv
 source .venv/bin/activate

@@ -37,6 +37,6 @@ def cron_get_sleep_time_timeout(
     return sleep_timedelta
 
 
-def cron_do_sleep(sleep_timedelta: timedelta):
+def cron_sleep(sleep_timedelta: timedelta):
     sleep_time = sleep_timedelta.total_seconds()
     time.sleep(sleep_time)

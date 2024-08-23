@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 import jsons
 from datetime import datetime
@@ -10,33 +9,35 @@ import signal
 import hashlib
 import threading
 
-from lib_land_registry_download.lib_kafka import create_consumer
-from lib_land_registry_download.lib_kafka import create_producer
+from lib_land_registry_data.lib_kafka import create_consumer
+from lib_land_registry_data.lib_kafka import create_producer
+
+from lib_land_registry_data.lib_filesystem import get_file_path_pp_monthly_update
 
 from confluent_kafka import Consumer
 from confluent_kafka import Producer
 
-from lib_land_registry_download.lib_topic_name import topic_name_land_registry_download_monthly_update_database_updater_notification
-from lib_land_registry_download.lib_topic_name import topic_name_land_registry_download_monthly_update_garbage_collector_notification
+from lib_land_registry_data.lib_topic_name import topic_name_land_registry_data_monthly_update_database_updater_notification
+from lib_land_registry_data.lib_topic_name import topic_name_land_registry_data_monthly_update_garbage_collector_notification
 
-from lib_land_registry_download.lib_dto import MonthlyUpdateDatabaseUpdateCompleteNotificationDTO
-from lib_land_registry_download.lib_dto import MonthlyUpdateGarbageCollectorCompleteNotificationDTO
+from lib_land_registry_data.lib_dto import MonthlyUpdateDatabaseUpdateCompleteNotificationDTO
+from lib_land_registry_data.lib_dto import MonthlyUpdateGarbageCollectorCompleteNotificationDTO
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from lib_land_registry_download.lib_db import PricePaidDataMonthlyUpdateFileLog
+from lib_land_registry_data.lib_db import PricePaidDataMonthlyUpdateFileLog
 
 import logging
 import sys
 
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_GARBAGE_COLLECTOR as PROCESS_NAME
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_GARBAGE_COLLECTOR as CLIENT_ID
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_GARBAGE_COLLECTOR as GROUP_ID
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER
-from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER
-from lib_land_registry_download.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE
-from lib_land_registry_download.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_GARBAGE_COLLECTION_COMPLETE
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_GARBAGE_COLLECTOR as PROCESS_NAME
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_GARBAGE_COLLECTOR as CLIENT_ID
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_GARBAGE_COLLECTOR as GROUP_ID
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER
+from lib_land_registry_data.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER
+from lib_land_registry_data.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE
+from lib_land_registry_data.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_GARBAGE_COLLECTION_COMPLETE
 
 
 class PathIsNotAFileError(OSError):
@@ -101,8 +102,8 @@ def run_process(
     producer: Producer,
 ) -> None:
 
-    consumer.subscribe([topic_name_land_registry_download_monthly_update_database_updater_notification])
-    log.info(f'consumer subscribing to topic {topic_name_land_registry_download_monthly_update_database_updater_notification}')
+    consumer.subscribe([topic_name_land_registry_data_monthly_update_database_updater_notification])
+    log.info(f'consumer subscribing to topic {topic_name_land_registry_data_monthly_update_database_updater_notification}')
 
     consumer_poll_timeout = 10.0
 
@@ -192,11 +193,6 @@ def consumer_poll_loop(consumer: Consumer) -> None:
     consumer.resume(topic_partition_assignment)
 
 
-def get_file_path(filename: str) -> str:
-    data_directory = '/data-land-registry/pp-monthly-update'
-    return f'{data_directory}/{filename}'
-
-
 def notify(
     producer: Producer,
     filename: str,
@@ -220,7 +216,7 @@ def notify(
     document_json_str = jsons.dumps(gc_dto)
 
     producer.produce(
-        topic=topic_name_land_registry_download_monthly_update_garbage_collector_notification,
+        topic=topic_name_land_registry_data_monthly_update_garbage_collector_notification,
         key=f'no_key',
         value=document_json_str,
     )
@@ -273,7 +269,7 @@ def garbage_collect(
                     existing_row.deleted_datetime = now
                     session.commit()
 
-                    file_path = get_file_path(filename)
+                    file_path = get_file_path_pp_monthly_update(filename)
                     log.info(f'delete file: {filename}, age: {file_age}')
                     log.info(f'path: {file_path}')
 
