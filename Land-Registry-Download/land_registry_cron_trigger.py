@@ -15,14 +15,10 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER
-from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 
 from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION
 
-from lib_land_registry_data.logging import set_logger_process_name
-from lib_land_registry_data.logging import get_logger
-from lib_land_registry_data.logging import create_stdout_log_handler
-from lib_land_registry_data.logging import create_file_log_handler
+from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 
 from lib_land_registry_data.lib_cron import cron_get_next_schedule
 from lib_land_registry_data.lib_cron import cron_get_sleep_time
@@ -37,6 +33,11 @@ from lib_land_registry_data.lib_db import PPCompleteDownloadFileLog
 from lib_land_registry_data.lib_db import PPMonthlyUpdateDownloadFileLog
 
 from lib_land_registry_data.lib_env import EnvironmentVariables
+
+from lib_land_registry_data.logging import set_logger_process_name
+from lib_land_registry_data.logging import get_logger
+from lib_land_registry_data.logging import create_stdout_log_handler
+from lib_land_registry_data.logging import create_file_log_handler
 
 # TODO: update this doc
 # Processes:
@@ -102,7 +103,7 @@ def main():
 
 def run_controller_process(
     producer: Producer,
-    engine: Engine,    
+    engine: Engine,
 ) -> None:
     global exit_flag
 

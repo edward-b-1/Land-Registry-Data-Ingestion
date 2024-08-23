@@ -44,15 +44,18 @@ import botocore
 from lib_land_registry_data.lib_kafka import create_consumer
 from lib_land_registry_data.lib_kafka import create_producer
 
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER
+
 from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION
 from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
 
-from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE
 
 from lib_land_registry_data.lib_dto import CronTriggerNotificationDTO
 from lib_land_registry_data.lib_dto import PPMonthlyUpdateDownloadCompleteNotificationDTO
+
+from lib_land_registry_data.lib_db import PPMonthlyUpdateDownloadFileLog
 
 from lib_land_registry_data.lib_env import EnvironmentVariables
 
@@ -60,8 +63,6 @@ from lib_land_registry_data.logging import set_logger_process_name
 from lib_land_registry_data.logging import get_logger
 from lib_land_registry_data.logging import create_stdout_log_handler
 from lib_land_registry_data.logging import create_file_log_handler
-
-from lib_land_registry_data.lib_db import PPMonthlyUpdateDownloadFileLog
 
 
 event_thead_terminate = threading.Event()
@@ -83,9 +84,9 @@ logger.addHandler(file_log_handler)
 
 def main():
     logger.info(f'{PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER} start')
-    
+
     environment_variables = EnvironmentVariables()
-    
+
     logger.info(f'create kafka consumer producer')
     kafka_bootstrap_servers = environment_variables.get_kafka_bootstrap_servers()
 
@@ -99,23 +100,23 @@ def main():
         bootstrap_servers=kafka_bootstrap_servers,
         client_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
     )
-    
+
     logger.info(f'create boto3 session')
     aws_access_key_id = environment_variables.get_aws_access_key_id()
     aws_secret_access_key = environment_variables.get_aws_secret_access_key()
-    
+
     # TODO: move to library code
     boto3_session = boto3.Session(
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
     )
-    
+
     logger.info(f'create database engine')
     postgres_connection_string = environment_variables.get_postgres_connection_string()
     engine_postgres = create_engine(postgres_connection_string)
 
     kafka_event_loop(consumer, producer, boto3_session, engine_postgres)
-    
+
 
 def kafka_event_loop(
     consumer: Consumer,
@@ -157,18 +158,18 @@ def kafka_event_loop(
             raise RuntimeError(f'{message.value().decode()}')
         else:
             logger.debug(f'message received')
-            document = jsons.loads(
+            dto = jsons.loads(
                 message.value().decode(),
                 CronTriggerNotificationDTO,
             )
 
             try:
-                notification_type = document.notification_type
+                notification_type = dto.notification_type
                 logger.debug(f'message type {notification_type}')
-                
+
                 if notification_type == NOTIFICATION_TYPE_CRON_TRIGGER:
                     logger.debug(f'appending message of type {notification_type} to message queue')
-                    message_queue.append(document)
+                    message_queue.append(dto)
                 else:
                     raise RuntimeError(f'unknown notification type: {notification_type}')
 
@@ -191,17 +192,17 @@ def process_message_queue(
         run_download_flag,
         pp_monthly_update_file_log_id,
     ) = process_message_queue_filter_for_download_trigger_message(message_queue)
-    
+
     if run_download_flag:
         # Long running process about to start, setup consumer poll loop
         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
         thread_handle.start()
-        
+
         cron_target_date = get_cron_target_date_from_database(
             pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
             engine_postgres=engine_postgres,
         )
-        
+
         run_download_and_update_database_and_notify(
             pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
             cron_target_date=cron_target_date,
@@ -214,8 +215,8 @@ def process_message_queue(
         thread_handle.join()
         consumer.commit()
         event_thead_terminate.clear()
-        
-    
+
+
 def process_message_queue_filter_for_download_trigger_message(
     message_queue: list[CronTriggerNotificationDTO],
 ) -> tuple[bool, int|None]:
@@ -247,8 +248,8 @@ def process_message_queue_filter_for_download_trigger_message(
             raise RuntimeError(f'unknown notification type: {notification_type}')
     else:
         return (False, None)
-        
-        
+
+
 def get_cron_target_date_from_database(
     pp_monthly_update_file_log_id: int,
     engine_postgres: Engine,
@@ -290,8 +291,8 @@ def run_download_and_update_database_and_notify(
         )
     else:
         logger.error(f'failed to download file, give up, will not try again')
-        
-        
+
+
 @dataclass
 class DownloadUploadStatistics():
     download_start_timestamp: datetime
@@ -302,7 +303,7 @@ class DownloadUploadStatistics():
     s3_upload_duration: timedelta
     s3_bucket: str
     s3_object_key: str
-    
+
 @dataclass
 class HashStatistics():
     hash_start_timestamp: datetime
@@ -328,10 +329,10 @@ def download_pp_monthly_update_and_upload_to_s3(
                 download_complete_timestamp,
                 download_duration,
             ) = download_data_to_memory(url)
-        
+
         except Exception as error:
             logger.error(f'{error}')
-            
+
             fail_count += 1
             if fail_count > 20:
                 logger.error(f'download failed after {fail_count} retries, give up')
@@ -340,14 +341,14 @@ def download_pp_monthly_update_and_upload_to_s3(
                 logger.warning(f'download failed, retry in 1h, number of failures: {fail_count}')
                 time_1_hour = 3600
                 time.sleep(time_1_hour)
-                
+
         (
             s3_object_key,
             s3_upload_start_timestamp,
             s3_upload_complete_timestamp,
             s3_upload_duration,
         ) = upload_data_to_s3(data, cron_target_date, boto3_session)
-    
+
         download_upload_statistics = DownloadUploadStatistics(
             download_start_timestamp=download_start_timestamp,
             download_complete_timestamp=download_complete_timestamp,
@@ -358,33 +359,33 @@ def download_pp_monthly_update_and_upload_to_s3(
             s3_bucket='land-registry-data-tmp',
             s3_object_key=s3_object_key,
         )
-            
+
         update_database_s3(
             engine_postgres=engine_postgres,
             pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
             download_upload_statistics=download_upload_statistics,
         )
-        
+
         (
             hash_start_timestamp,
             hash_complete_timestamp,
             hash_duration,
             sha256sum_hex_str,
         ) = calculate_sha256sum(data)
-        
+
         hash_statistics = HashStatistics(
             hash_start_timestamp=hash_start_timestamp,
             hash_complete_timestamp=hash_complete_timestamp,
             hash_duration=hash_duration,
             hash_hex_str=sha256sum_hex_str,
         )
-        
+
         update_database_sha256sum(
             engine_postgres=engine_postgres,
             pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
             hash_statistics=hash_statistics,
         )
-    
+
         return (True, download_upload_statistics, hash_statistics)
 
 
@@ -393,7 +394,7 @@ def download_data_to_memory(
 ) -> tuple[bytes, datetime, datetime, timedelta]|None:
 
     download_start_timestamp = datetime.now(timezone.utc)
-    
+
     logger.info(f'downloading from {url}: download starting {download_start_timestamp}')
 
     response = requests.get(url, allow_redirects=True)
@@ -413,7 +414,7 @@ def download_data_to_memory(
     logger.info(f'download complete: {download_complete_timestamp}')
     download_duration = download_complete_timestamp - download_start_timestamp
     logger.info(f'download duration: {download_duration}')
-    
+
     return (data, download_start_timestamp, download_complete_timestamp, download_duration)
 
 
@@ -422,10 +423,10 @@ def upload_data_to_s3(
     cron_target_date: date,
     boto3_session,
 ) -> tuple[str, datetime, datetime, timedelta]|None:
-    
+
     bucket = 'land-registry-data-tmp'
     object_key = f'pp-monthly-update-{cron_target_date}.txt'
-    
+
     # check if the object key exists - if it does, raise Exception (?)
     boto3_client = boto3_session.client('s3')
     try:
@@ -441,7 +442,7 @@ def upload_data_to_s3(
             pass
         else:
             raise
-    
+
     s3_upload_start_timestamp = datetime.now(timezone.utc)
     logger.info(f'uploading to s3: upload starting {s3_upload_start_timestamp}')
     boto3_client.put_object(Bucket=bucket, Key=object_key, Body=data)
@@ -449,10 +450,10 @@ def upload_data_to_s3(
     logger.info(f'upload complete: {s3_upload_complete_timestamp}')
     s3_upload_duration = s3_upload_complete_timestamp - s3_upload_start_timestamp
     logger.info(f'upload duration: {s3_upload_duration}')
-    
+
     return (object_key, s3_upload_start_timestamp, s3_upload_complete_timestamp, s3_upload_duration)
-    
-        
+
+
 def update_database_s3(
     engine_postgres: Engine,
     pp_monthly_update_file_log_id: int,
@@ -465,17 +466,17 @@ def update_database_s3(
             .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
             .one()
         )
-        
+
         row.download_start_datetime = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
         row.s3_tmp_bucket = download_upload_statistics.s3_bucket
         row.s3_tmp_object_key = download_upload_statistics.s3_object_key
         row.s3_upload_to_tmp_bucket_start_datetime = download_upload_statistics.s3_upload_start_timestamp
         row.s3_upload_to_tmp_bucket_duration = download_upload_statistics.s3_upload_duration
-        
+
         session.commit()
-        
-        
+
+
 def update_database_sha256sum(
     engine_postgres: Engine,
     pp_monthly_update_file_log_id: int,
@@ -488,14 +489,14 @@ def update_database_sha256sum(
             .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
             .one()
         )
-        
+
         row.sha256sum_start_datetime = hash_statistics.hash_start_timestamp
         row.sha256sum_duration = hash_statistics.hash_complete_timestamp
         row.sha256sum = hash_statistics.hash_hex_str
-        
+
         session.commit()
-        
-        
+
+
 def calculate_sha256sum(data: bytes) -> tuple[datetime, datetime, timedelta, str]:
     hash_start_timestamp = datetime.now(timezone.utc)
     logger.info(f'sha256: calculation starting {hash_start_timestamp}')
@@ -513,19 +514,19 @@ def notify(
     pp_monthly_update_file_log_id: int,
 ) -> None:
 
-    document = PPMonthlyUpdateDownloadCompleteNotificationDTO(
+    dto = PPMonthlyUpdateDownloadCompleteNotificationDTO(
         notification_source=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
         notification_type=NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
         pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
     )
 
-    document_json_str = jsons.dumps(document, strip_privates=True)
+    dto_json_str = jsons.dumps(dto, strip_privates=True)
 
     producer.produce(
         topic=TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION,
         key=f'no_key',
-        value=document_json_str,
+        value=dto_json_str,
     )
     producer.flush()
 

@@ -13,46 +13,46 @@ from typing import Optional
 
 class LandRegistryBase(DeclarativeBase):
     __table_args__ = {'schema': 'land_registry_2'}
-    
-    
+
+
 # class CronTriggerLog(LandRegistryBase):
-    
+
 #     __tablename__ = 'cron_trigger_log'
-    
+
 #     cron_trigger_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
-    
-    
+
+
+
 
 class PPCompleteDownloadFileLog(LandRegistryBase):
-    
+
     __tablename__ = 'pp_complete_download_file_log'
-    
+
     pp_complete_file_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     created_datetime: Mapped[datetime]
-    
+
     cron_target_date: Mapped[date]
     cron_target_datetime: Mapped[datetime]
     cron_trigger_datetime: Mapped[datetime]
-    
+
     download_start_datetime: Mapped[Optional[datetime]]
     download_duration: Mapped[Optional[timedelta]]
     s3_tmp_bucket: Mapped[Optional[str]]
     s3_tmp_object_key: Mapped[Optional[str]]
     s3_upload_to_tmp_bucket_start_datetime: Mapped[Optional[datetime]]
     s3_upload_to_tmp_bucket_duration: Mapped[Optional[timedelta]]
-    
+
     sha256sum_start_datetime: Mapped[Optional[datetime]]
     sha256sum_duration: Mapped[Optional[timedelta]]
     sha256sum: Mapped[Optional[str]]
-    
+
     data_decision_datetime: Mapped[Optional[datetime]]
     data_decision: Mapped[Optional[str]] # garbage_collect or archive
-    
+
     gc_datetime: Mapped[Optional[datetime]]
     gc_action_taken: Mapped[Optional[str]]
-    
+
     s3_archive_datetime: Mapped[Optional[datetime]]
     s3_archive_action_taken: Mapped[Optional[str]]
     s3_archive_bucket: Mapped[Optional[str]]
@@ -61,20 +61,20 @@ class PPCompleteDownloadFileLog(LandRegistryBase):
     s3_download_from_tmp_bucket_duration: Mapped[Optional[timedelta]]
     s3_upload_to_archive_bucket_start_datetime: Mapped[Optional[datetime]]
     s3_upload_to_archive_bucket_duration: Mapped[Optional[timedelta]]
-    
+
 
 class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
 
     __tablename__ = 'pp_monthly_update_download_file_log'
 
     pp_monthly_update_file_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     created_datetime: Mapped[datetime]
-    
+
     cron_target_date: Mapped[date]
     cron_target_datetime: Mapped[datetime]
     cron_trigger_datetime: Mapped[datetime]
-    
+
     download_start_datetime: Mapped[Optional[datetime]]
     download_duration: Mapped[Optional[timedelta]]
     s3_tmp_bucket: Mapped[Optional[str]]
@@ -85,13 +85,13 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
     sha256sum_start_datetime: Mapped[Optional[datetime]]
     sha256sum_duration: Mapped[Optional[timedelta]]
     sha256sum: Mapped[Optional[str]]
-    
+
     data_decision_datetime: Mapped[Optional[datetime]]
     data_decision: Mapped[Optional[str]] # garbage_collect or archive
-    
+
     gc_datetime: Mapped[Optional[datetime]]
     gc_action_taken: Mapped[Optional[str]]
-    
+
     s3_archive_datetime: Mapped[Optional[datetime]]
     s3_archive_action_taken: Mapped[Optional[str]]
     s3_archive_bucket: Mapped[Optional[str]]
@@ -100,70 +100,82 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
     s3_download_from_tmp_bucket_duration: Mapped[Optional[timedelta]]
     s3_upload_to_archive_bucket_start_datetime: Mapped[Optional[datetime]]
     s3_upload_to_archive_bucket_duration: Mapped[Optional[timedelta]]
-    
-    
+
+
+# NOTE:
+# historical data files should exist in S3 bucket
+# script should be run to calculate shasums of existing files
+# and add rows to this db table
+# the existing files should be "queried" using known names
+# for example, we know the name should be pp-monthly-update-DATE.txt
+# and all the dates are known in advance.
+# if a file does not exist, this is an error
+# the column names are known in advance, there are two column name
+# schemas, one with and one without the ppdcat column
 class PPMonthlyUpdateArchiveFileLog(LandRegistryBase):
-    
+
     __tablename__ = 'pp_monthly_update_archive_file_log'
-    
+
     pp_monthly_update_archive_file_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     created_datetime: Mapped[datetime]
-    
-    file_type: Mapped[str] # `backdated` or `current`
+
+    file_type: Mapped[str] # `historical` or `current`
     file_datetime: Mapped[datetime]
     s3_bucket: Mapped[str]
     s3_object_key: Mapped[str]
-    
+    sha256sum: Mapped[str]
+
     database_update_start_datetime: Mapped[datetime]
     database_update_duration: Mapped[timedelta]
-    
-    
+
+
 class PPCompleteArchiveFileLog(LandRegistryBase):
-    
+
     __tablename__ = 'pp_complete_archive_file_log'
-    
+
     pp_complete_archive_file_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     created_datetime: Mapped[datetime]
-    
-    file_type: Mapped[str] # `backdated` or `current`
+
+    file_type: Mapped[str] # `historical` or `current`
     file_datetime: Mapped[datetime]
     s3_bucket: Mapped[str]
     s3_object_key: Mapped[str]
-    
+    sha256sum: Mapped[str]
+
     database_upload_start_datetime: Mapped[datetime]
     database_upload_duration: Mapped[timedelta]
-    
-    
+
+
 class PPDataConsistencyCheckLog(LandRegistryBase):
-    
+
     __tablename__ = 'pp_data_consistency_check_log'
-    
+
     pp_data_consistency_check_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     created_datetime: Mapped[datetime]
-    
+
     consistency_check_start_datetime: Mapped[datetime]
     consistency_check_duration: Mapped[timedelta]
     consistency_check_result: Mapped[str]
-    
+
     row_count_pp_complete_only: Mapped[int]
     row_count_pp_monthly_update_only: Mapped[int]
-    
-    
+
+
 class PPDataReconciliationLog(LandRegistryBase):
-    
+
     __tablename__ = 'pp_data_reconciliation_log'
-    
+
     pp_data_reconciliation_log_id: Mapped[int] = mapped_column(primary_key=True)
-    
+
     created_datetime: Mapped[datetime]
-    
+
     reconciliation_start_datetime: Mapped[datetime]
     reconciliation_duration: Mapped[timedelta]
-    
-    # TODO: other fields...    
+
+    # TODO: other fields...
 
 # class PricePaidData(LandRegistryBase):
 
