@@ -46,33 +46,6 @@ class PPMonthlyUpdateDownloadCompleteNotificationDTO():
     notification_timestamp: datetime
     
     pp_monthly_update_file_log_id: int
-    
-    
-@dataclass
-class PPCompleteShasumNotificationDTO():
-    '''
-    Notification that Price Paid Complete data SHASUM calculation
-    has completed
-    '''
-
-    notification_source: str
-    notification_type: str
-    notification_timestamp: datetime
-    
-    pp_complete_file_log_id: int
-    
-
-@dataclass
-class PPMonthlyUpdateShasumNotificationDTO():
-    '''
-    Notification that SHASUM calculation has completed
-    '''
-
-    notification_source: str
-    notification_type: str
-    notification_timestamp: datetime
-    
-    pp_monthly_update_file_log_id: int
 
 
 @dataclass
