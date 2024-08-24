@@ -107,8 +107,8 @@ def kafka_event_loop(
     postgres_engine: Engine,
 ) -> None:
 
-    logger.info(f'consumer subscribing to topic {NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE}')
-    consumer.subscribe([NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE])
+    logger.info(f'consumer subscribing to topic {TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION}')
+    consumer.subscribe([TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION])
     consumer_poll_timeout = 10.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
 
