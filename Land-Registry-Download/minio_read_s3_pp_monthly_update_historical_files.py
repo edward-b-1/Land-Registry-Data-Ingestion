@@ -19,6 +19,8 @@ The historical files must already exist in S3. (In the bucket
 format. They were originally supplied (mostly) as zip files. Some files were
 later supplied in csv or Excel formats. This was to fix issues with missing
 files or corrupt data (unreadable files).
+
+The original data files can be found in the bucket `land-registry-monthly-data-files`.
 '''
 
 
