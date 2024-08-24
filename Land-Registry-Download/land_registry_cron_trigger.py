@@ -14,9 +14,9 @@ from sqlalchemy import create_engine
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_CRON_TRIGGER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION
+from lib_land_registry_data.lib_topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 
@@ -68,13 +68,13 @@ from lib_land_registry_data.logging import create_file_log_handler
 
 
 set_logger_process_name(
-    process_name=PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER,
+    process_name=PROCESS_NAME_CRON_TRIGGER,
 )
 
 logger = get_logger()
 stdout_log_handler = create_stdout_log_handler()
 file_log_handler = create_file_log_handler(
-    logger_process_name=PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER,
+    logger_process_name=PROCESS_NAME_CRON_TRIGGER,
     logger_file_datetime=datetime.now(timezone.utc).date(),
 )
 logger.addHandler(stdout_log_handler)
@@ -82,7 +82,7 @@ logger.addHandler(file_log_handler)
 
 
 def main():
-    logger.info(f'{PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER} start')
+    logger.info(f'{PROCESS_NAME_CRON_TRIGGER} start')
 
     environment_variables = EnvironmentVariables()
     kafka_bootstrap_servers = environment_variables.get_kafka_bootstrap_servers()
@@ -91,9 +91,9 @@ def main():
     logger.info(f'create producer')
     producer = create_producer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER,
+        client_id=PROCESS_NAME_CRON_TRIGGER,
     )
-    
+
     logger.info(f'create engine')
     postgres_engine = create_engine(postgres_connection_string)
 
@@ -140,13 +140,13 @@ def run_controller_process(
             cron_trigger_datetime=cron_trigger_datetime,
         )
         logger.info(f'database updated')
-        
+
         notify_trigger(producer)
         logger.info(f'notification sent')
 
     logger.info(f'process exit')
-    
-    
+
+
 def update_database(
     engine: Engine,
     cron_target_date: date,
@@ -154,7 +154,7 @@ def update_database(
     cron_trigger_datetime: datetime,
 ) -> None:
     now = datetime.now(timezone.utc)
-    
+
     with Session(engine) as session:
         row = PPCompleteDownloadFileLog(
             created_datetime=now,
@@ -164,7 +164,7 @@ def update_database(
         )
         session.add(row)
         session.commit()
-        
+
     with Session(engine) as session:
         row = PPMonthlyUpdateDownloadFileLog(
             created_datetime=now,
@@ -174,8 +174,8 @@ def update_database(
         )
         session.add(row)
         session.commit()
-    
-        
+
+
 
 def notify_trigger(
     producer: Producer,
@@ -183,7 +183,7 @@ def notify_trigger(
     pp_monthly_update_file_log_id: int,
 ) -> None:
     document = CronTriggerNotificationDTO(
-        notification_source=PROCESS_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER,
+        notification_source=PROCESS_NAME_CRON_TRIGGER,
         notification_type=NOTIFICATION_TYPE_CRON_TRIGGER,
         notification_timestamp=datetime.now(timezone.utc),
         pp_complete_file_log_id=pp_complete_file_log_id,
@@ -196,7 +196,7 @@ def notify_trigger(
     )
 
     producer.produce(
-        topic=TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION,
+        topic=TOPIC_NAME_CRON_TRIGGER_NOTIFICATION,
         key=f'no_key',
         value=document_json_str
     )

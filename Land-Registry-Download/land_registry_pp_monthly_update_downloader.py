@@ -44,10 +44,10 @@ import botocore
 from lib_land_registry_data.lib_kafka import create_consumer
 from lib_land_registry_data.lib_kafka import create_producer
 
-from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
+from lib_land_registry_data.lib_topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
+from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE
@@ -69,13 +69,13 @@ event_thead_terminate = threading.Event()
 
 
 set_logger_process_name(
-    process_name=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
+    process_name=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
 )
 
 logger = get_logger()
 stdout_log_handler = create_stdout_log_handler()
 file_log_handler = create_file_log_handler(
-    logger_process_name=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
+    logger_process_name=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
     logger_file_datetime=datetime.now(timezone.utc).date(),
 )
 logger.addHandler(stdout_log_handler)
@@ -83,50 +83,61 @@ logger.addHandler(file_log_handler)
 
 
 def main():
-    logger.info(f'{PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER} start')
+    logger.info(f'{PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER} start')
 
     environment_variables = EnvironmentVariables()
 
-    logger.info(f'create kafka consumer producer')
     kafka_bootstrap_servers = environment_variables.get_kafka_bootstrap_servers()
+    logger.info(f'create kafka consumer producer: bootstrap_servers={kafka_bootstrap_servers}')
 
+    logger.info(f'create consumer')
     consumer = create_consumer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
-        group_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
+        client_id=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
+        group_id=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
     )
 
+    logger.info(f'create producer')
     producer = create_producer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
+        client_id=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
     )
 
-    logger.info(f'create boto3 session')
     aws_access_key_id = environment_variables.get_aws_access_key_id()
     aws_secret_access_key = environment_variables.get_aws_secret_access_key()
+    minio_url = environment_variables.get_minio_url()
 
     # TODO: move to library code
+    logger.info(f'create boto3 session: minio_url={minio_url}')
     boto3_session = boto3.Session(
         aws_access_key_id=aws_access_key_id,
         aws_secret_access_key=aws_secret_access_key,
     )
 
-    logger.info(f'create database engine')
+    logger.info(f'create database engine: postgres_host={environment_variables.get_postgres_host()}')
     postgres_connection_string = environment_variables.get_postgres_connection_string()
     engine_postgres = create_engine(postgres_connection_string)
 
-    kafka_event_loop(consumer, producer, boto3_session, engine_postgres)
+    logger.info(f'run event loop')
+    kafka_event_loop(
+        consumer=consumer,
+        producer=producer,
+        boto3_session=boto3_session,
+        minio_url=minio_url,
+        engine_postgres=engine_postgres,
+    )
 
 
 def kafka_event_loop(
     consumer: Consumer,
     producer: Producer,
     boto3_session,
+    minio_url: str,
     engine_postgres: Engine
 ) -> None:
 
-    logger.info(f'consumer subscribing to topic {TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION}')
-    consumer.subscribe([TOPIC_NAME_LAND_REGISTRY_DATA_CRON_TRIGGER_NOTIFICATION])
+    logger.info(f'consumer subscribing to topic {TOPIC_NAME_CRON_TRIGGER_NOTIFICATION}')
+    consumer.subscribe([TOPIC_NAME_CRON_TRIGGER_NOTIFICATION])
     consumer_poll_timeout = 10.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
     message_queue = []
@@ -148,6 +159,7 @@ def kafka_event_loop(
                     consumer=consumer,
                     producer=producer,
                     boto3_session=boto3_session,
+                    minio_url=minio_url,
                     engine_postgres=engine_postgres,
                 )
                 message_queue.clear()
@@ -185,6 +197,7 @@ def process_message_queue(
     consumer: Consumer,
     producer: Producer,
     boto3_session,
+    minio_url: str,
     engine_postgres: Engine,
 ):
     # TODO: can raise exception (but doesn't due to logic elsewhere)
@@ -208,6 +221,7 @@ def process_message_queue(
             cron_target_date=cron_target_date,
             producer=producer,
             boto3_session=boto3_session,
+            minio_url=minio_url,
             engine_postgres=engine_postgres,
         )
 
@@ -270,6 +284,7 @@ def run_download_and_update_database_and_notify(
     cron_target_date: date,
     producer: Producer,
     boto3_session,
+    minio_url: str,
     engine_postgres: Engine,
 ):
     logger.info('run_download_process: run_download_and_notify')
@@ -282,6 +297,7 @@ def run_download_and_update_database_and_notify(
         pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
         engine_postgres=engine_postgres,
         boto3_session=boto3_session,
+        minio_url=minio_url,
     )
 
     if success:
@@ -317,6 +333,7 @@ def download_pp_monthly_update_and_upload_to_s3(
     pp_monthly_update_file_log_id: int,
     engine_postgres: Engine,
     boto3_session,
+    minio_url: str,
 ) -> tuple[bool, DownloadUploadStatistics|None, HashStatistics|None]:
     url = 'http://prod1.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com/pp-monthly-update.txt'
 
@@ -347,7 +364,7 @@ def download_pp_monthly_update_and_upload_to_s3(
             s3_upload_start_timestamp,
             s3_upload_complete_timestamp,
             s3_upload_duration,
-        ) = upload_data_to_s3(data, cron_target_date, boto3_session)
+        ) = upload_data_to_s3(data, cron_target_date, boto3_session, minio_url)
 
         download_upload_statistics = DownloadUploadStatistics(
             download_start_timestamp=download_start_timestamp,
@@ -422,13 +439,20 @@ def upload_data_to_s3(
     data: bytes,
     cron_target_date: date,
     boto3_session,
+    minio_url: str,
 ) -> tuple[str, datetime, datetime, timedelta]|None:
 
     bucket = 'land-registry-data-tmp'
     object_key = f'pp-monthly-update-{cron_target_date}.txt'
 
     # check if the object key exists - if it does, raise Exception (?)
-    boto3_client = boto3_session.client('s3')
+    boto3_client = (
+        boto3_session.client(
+            's3',
+            endpoint_url=minio_url,
+            config=botocore.Config(signature_version='s3v4'),
+        )
+    )
     try:
         if boto3_client.head_object(Bucket=bucket, Key=object_key):
             exists=True
@@ -515,7 +539,7 @@ def notify(
 ) -> None:
 
     dto = PPMonthlyUpdateDownloadCompleteNotificationDTO(
-        notification_source=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER,
+        notification_source=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
         notification_type=NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
         pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
@@ -524,7 +548,7 @@ def notify(
     dto_json_str = jsons.dumps(dto, strip_privates=True)
 
     producer.produce(
-        topic=TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION,
+        topic=TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION,
         key=f'no_key',
         value=dto_json_str,
     )

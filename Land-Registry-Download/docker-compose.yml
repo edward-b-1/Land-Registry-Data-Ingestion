@@ -46,3 +46,21 @@ services:
             context: .
             dockerfile: ./docker/land_registry_pp_complete_data_decision_service/Dockerfile
         restart: no
+
+    land_registry_pp_monthly_update_gc_service:
+        container_name: land_registry_pp_monthly_update_gc_service
+        image: example/land_registry_pp_monthly_update_gc_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_monthly_update_gc_service/Dockerfile
+        restart: no
+
+    land_registry_pp_complete_gc_service:
+        container_name: land_registry_pp_complete_gc_service
+        image: example/land_registry_pp_complete_gc_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_gc_service/Dockerfile
+        restart: no

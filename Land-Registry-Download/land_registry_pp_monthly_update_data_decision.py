@@ -1,6 +1,5 @@
 
 import signal
-import threading
 import jsons
 from datetime import datetime
 from datetime import timezone
@@ -12,11 +11,11 @@ from sqlalchemy import Engine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION
-from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOADER
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION
+from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
+from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE
@@ -38,13 +37,13 @@ from lib_land_registry_data.logging import create_file_log_handler
 
 
 set_logger_process_name(
-    process_name=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION,
+    process_name=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
 )
 
 logger = get_logger()
 stdout_log_handler = create_stdout_log_handler()
 file_log_handler = create_file_log_handler(
-    logger_process_name=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION,
+    logger_process_name=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
     logger_file_datetime=datetime.now(timezone.utc).date(),
 )
 logger.addHandler(stdout_log_handler)
@@ -52,29 +51,30 @@ logger.addHandler(file_log_handler)
 
 
 def main():
-    logger.info(f'{PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION} start')
+    logger.info(f'{PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION} start')
 
     environment_variables = EnvironmentVariables()
     kafka_bootstrap_servers = environment_variables.get_kafka_bootstrap_servers()
-    postgres_connection_string = environment_variables.get_postgres_connection_string()
+    logger.info(f'create kafka consumer producer: bootstrap_servers={kafka_bootstrap_servers}')
 
     logger.info(f'create consumer')
     consumer = create_consumer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION,
-        group_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION,
+        client_id=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
+        group_id=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
     )
 
     logger.info(f'create producer')
     producer = create_producer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION,
+        client_id=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
     )
 
-    logger.info(f'create engine')
+    postgres_connection_string = environment_variables.get_postgres_connection_string()
+    logger.info(f'create database engine: postgres_host={environment_variables.get_postgres_host()}')
     postgres_engine = create_engine(postgres_connection_string)
 
-    logger.info(f'run controller process')
+    logger.info(f'run event loop')
     kafka_event_loop(
         consumer=consumer,
         producer=producer,
@@ -88,8 +88,8 @@ def kafka_event_loop(
     postgres_engine: Engine,
 ) -> None:
 
-    logger.info(f'consumer subscribing to topic {TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION}')
-    consumer.subscribe([TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION])
+    logger.info(f'consumer subscribing to topic {TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION}')
+    consumer.subscribe([TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION])
     consumer_poll_timeout = 10.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
 
@@ -185,7 +185,7 @@ def notify(
 ) -> None:
 
     dto = PPMonthlyUpdateDataDecisionNotificationDTO(
-        notification_source=PROCESS_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION,
+        notification_source=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
         notification_type=NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
         pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
@@ -194,7 +194,7 @@ def notify(
     dto_json_str = jsons.dumps(dto, strip_privates=True)
 
     producer.produce(
-        topic=TOPIC_NAME_LAND_REGISTRY_DATA_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION,
+        topic=TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION,
         key=f'no_key',
         value=dto_json_str,
     )
