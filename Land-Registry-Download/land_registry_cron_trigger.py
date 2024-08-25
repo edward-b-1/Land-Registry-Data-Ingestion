@@ -133,7 +133,10 @@ def run_controller_process(
         cron_trigger_datetime = datetime.now(timezone.utc)
         cron_target_datetime = next_schedule
         cron_target_date = next_schedule.date()
-        update_database(
+        (
+            pp_monthly_update_file_log_id,
+            pp_complete_file_log_id,
+        )= update_database(
             engine,
             cron_target_date=cron_target_date,
             cron_target_datetime=cron_target_datetime,
@@ -141,7 +144,11 @@ def run_controller_process(
         )
         logger.info(f'database updated')
 
-        notify_trigger(producer)
+        notify_trigger(
+            producer=producer,
+            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_complete_file_log_id=pp_complete_file_log_id,
+        )
         logger.info(f'notification sent')
 
     logger.info(f'process exit')
@@ -152,7 +159,7 @@ def update_database(
     cron_target_date: date,
     cron_target_datetime: datetime,
     cron_trigger_datetime: datetime,
-) -> None:
+) -> tuple[int, int]:
     now = datetime.now(timezone.utc)
 
     with Session(engine) as session:
@@ -165,6 +172,8 @@ def update_database(
         session.add(row)
         session.commit()
 
+        pp_complete_file_log_id = row.pp_complete_file_log_id
+
     with Session(engine) as session:
         row = PPMonthlyUpdateDownloadFileLog(
             created_datetime=now,
@@ -175,6 +184,9 @@ def update_database(
         session.add(row)
         session.commit()
 
+        pp_monthly_update_file_log_id = row.pp_monthly_update_file_log_id
+
+    return (pp_monthly_update_file_log_id, pp_complete_file_log_id)
 
 
 def notify_trigger(
