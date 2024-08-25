@@ -36,14 +36,14 @@ class PPCompleteDownloadFileLog(LandRegistryBase):
     cron_target_datetime: Mapped[datetime]
     cron_trigger_datetime: Mapped[datetime]
 
-    download_start_datetime: Mapped[Optional[datetime]]
+    download_start_timestamp: Mapped[Optional[datetime]]
     download_duration: Mapped[Optional[timedelta]]
     s3_tmp_bucket: Mapped[Optional[str]]
     s3_tmp_object_key: Mapped[Optional[str]]
-    s3_upload_to_tmp_bucket_start_datetime: Mapped[Optional[datetime]]
+    s3_upload_to_tmp_bucket_start_timestamp: Mapped[Optional[datetime]]
     s3_upload_to_tmp_bucket_duration: Mapped[Optional[timedelta]]
 
-    sha256sum_start_datetime: Mapped[Optional[datetime]]
+    sha256sum_start_timestamp: Mapped[Optional[datetime]]
     sha256sum_duration: Mapped[Optional[timedelta]]
     sha256sum: Mapped[Optional[str]]
 
@@ -57,8 +57,8 @@ class PPCompleteDownloadFileLog(LandRegistryBase):
     s3_archive_action_taken: Mapped[Optional[str]]
     s3_archive_bucket: Mapped[Optional[str]]
     s3_archive_object_key: Mapped[Optional[str]]
-    s3_copy_start_datetime: Mapped[Optional[datetime]]
-    s3_copy_duration: Mapped[Optional[datetime]]
+    s3_copy_start_timestamp: Mapped[Optional[datetime]]
+    s3_copy_duration: Mapped[Optional[timedelta]]
 
 
 class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
@@ -73,14 +73,14 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
     cron_target_datetime: Mapped[datetime]
     cron_trigger_datetime: Mapped[datetime]
 
-    download_start_datetime: Mapped[Optional[datetime]]
+    download_start_timestamp: Mapped[Optional[datetime]]
     download_duration: Mapped[Optional[timedelta]]
     s3_tmp_bucket: Mapped[Optional[str]]
     s3_tmp_object_key: Mapped[Optional[str]]
-    s3_upload_to_tmp_bucket_start_datetime: Mapped[Optional[datetime]]
+    s3_upload_to_tmp_bucket_start_timestamp: Mapped[Optional[datetime]]
     s3_upload_to_tmp_bucket_duration: Mapped[Optional[timedelta]]
 
-    sha256sum_start_datetime: Mapped[Optional[datetime]]
+    sha256sum_start_timestamp: Mapped[Optional[datetime]]
     sha256sum_duration: Mapped[Optional[timedelta]]
     sha256sum: Mapped[Optional[str]]
 
@@ -94,8 +94,8 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
     s3_archive_action_taken: Mapped[Optional[str]]
     s3_archive_bucket: Mapped[Optional[str]]
     s3_archive_object_key: Mapped[Optional[str]]
-    s3_copy_start_datetime: Mapped[Optional[datetime]]
-    s3_copy_duration: Mapped[Optional[datetime]]
+    s3_copy_start_timestamp: Mapped[Optional[datetime]]
+    s3_copy_duration: Mapped[Optional[timedelta]]
 
 
 # NOTE:
@@ -123,7 +123,7 @@ class PPMonthlyUpdateArchiveFileLog(LandRegistryBase):
     sha256sum: Mapped[str]
     # TODO: need a row for "what date the file is for: year-month-day"
 
-    database_update_start_datetime: Mapped[Optional[datetime]]
+    database_update_start_timestamp: Mapped[Optional[datetime]]
     database_update_duration: Mapped[Optional[timedelta]]
 
 
@@ -142,7 +142,7 @@ class PPCompleteArchiveFileLog(LandRegistryBase):
     sha256sum: Mapped[str]
     # TODO: need a row for "what date the file is for: year-month-day"
 
-    database_upload_start_datetime: Mapped[Optional[datetime]]
+    database_upload_start_timestamp: Mapped[Optional[datetime]]
     database_upload_duration: Mapped[Optional[timedelta]]
 
 
@@ -154,7 +154,7 @@ class PPDataConsistencyCheckLog(LandRegistryBase):
 
     created_datetime: Mapped[datetime]
 
-    consistency_check_start_datetime: Mapped[datetime]
+    consistency_check_start_timestamp: Mapped[datetime]
     consistency_check_duration: Mapped[timedelta]
     consistency_check_result: Mapped[str]
 
@@ -170,7 +170,7 @@ class PPDataReconciliationLog(LandRegistryBase):
 
     created_datetime: Mapped[datetime]
 
-    reconciliation_start_datetime: Mapped[datetime]
+    reconciliation_start_timestamp: Mapped[datetime]
     reconciliation_duration: Mapped[timedelta]
 
     # TODO: other fields...
