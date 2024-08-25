@@ -27,6 +27,7 @@ from lib_land_registry_data.lib_dto import PPMonthlyUpdateDownloadCompleteNotifi
 from lib_land_registry_data.lib_dto import PPMonthlyUpdateDataDecisionNotificationDTO
 
 from lib_land_registry_data.lib_db import PPMonthlyUpdateDownloadFileLog
+from lib_land_registry_data.lib_db import PPMonthlyUpdateArchiveFileLog
 
 from lib_land_registry_data.lib_env import EnvironmentVariables
 
@@ -90,7 +91,7 @@ def kafka_event_loop(
 
     logger.info(f'consumer subscribing to topic {TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION}')
     consumer.subscribe([TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION])
-    consumer_poll_timeout = 10.0
+    consumer_poll_timeout = 5.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
 
     global exit_flag
@@ -132,33 +133,30 @@ def kafka_event_loop(
                             .one()
                         )
 
-                        rows_with_data_decision_archive = (
+                        rows_archive_table = (
                             session
-                            .query(PPMonthlyUpdateDownloadFileLog)
-                            .filter_by(data_decision='archive')
-                            .order_by(PPMonthlyUpdateDownloadFileLog.data_decsion_datetime)
+                            .query(PPMonthlyUpdateArchiveFileLog)
+                            .order_by(PPMonthlyUpdateArchiveFileLog.data_timestamp)
                             .all()
                         )
-                        logger.debug(f'number of database rows with data_decision=\'archive\': {len(rows_with_data_decision_archive)}')
+                        logger.debug(f'number of database rows from table PPMonthlyUpdateArchiveLog: {len(rows_archive_table)}')
 
-                        if len(rows_with_data_decision_archive) < 1:
-                            logger.debug(f'no previous rows with data_decision=\'archive\', current file will be archived')
+                        if len(rows_archive_table) < 1:
+                            logger.debug(f'no previous rows in table PPMonthlyUpdateArchiveLog, current file will be archived')
                             row.data_decision = 'archive'
                             row.data_decision_datetime = datetime.now(timezone.utc)
                             session.commit()
                         else:
-                            last_row_with_data_decision_archive = (
-                                rows_with_data_decision_archive[-1]
-                            )
+                            last_row_archive_table = rows_archive_table[-1]
 
-                            if last_row_with_data_decision_archive.sha256sum != row.sha256sum:
-                                logger.debug(f'previous row with data_decision=\'archive\' has different hash, current file will be archived')
-                                logger.debug(f'hash: {row.sha256sum}, previous hash: {last_row_with_data_decision_archive.sha256sum}')
+                            if last_row_archive_table.sha256sum != row.sha256sum:
+                                logger.debug(f'previous row in table PPMonthlyUpdateArchiveLog has different hash, current file will be archived')
+                                logger.debug(f'hash: {row.sha256sum}, previous hash: {last_row_archive_table.sha256sum}')
                                 row.data_decision = 'archive'
                                 row.data_decision_datetime = datetime.now(timezone.utc)
                                 session.commit()
                             else:
-                                logger.debug(f'previous row with data_decision=\'archive\' has same hash, current file will be deleted')
+                                logger.debug(f'previous row in table PPMonthlyUpdateArchiveLog has same hash, current file will be deleted')
                                 logger.debug(f'hash: {row.sha256sum}')
                                 row.data_decision = 'garbage_collect'
                                 row.data_decision_datetime = datetime.now(timezone.utc)
@@ -218,5 +216,6 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
 
 
