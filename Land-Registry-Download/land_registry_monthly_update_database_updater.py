@@ -417,7 +417,7 @@ def run_process(
     log.info(f'consumer subscribing to topic {topic_name_land_registry_data_monthly_update_data_decision_notification}')
     consumer.subscribe([topic_name_land_registry_data_monthly_update_data_decision_notification])
 
-    consumer_poll_timeout = 10.0
+    consumer_poll_timeout = 5.0
     log.debug(f'consumer poll timeout: {consumer_poll_timeout}')
 
     global exit_flag
@@ -1175,5 +1175,6 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
 
 
