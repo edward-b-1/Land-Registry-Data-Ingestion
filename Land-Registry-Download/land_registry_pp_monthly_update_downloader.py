@@ -138,7 +138,7 @@ def kafka_event_loop(
 
     logger.info(f'consumer subscribing to topic {TOPIC_NAME_CRON_TRIGGER_NOTIFICATION}')
     consumer.subscribe([TOPIC_NAME_CRON_TRIGGER_NOTIFICATION])
-    consumer_poll_timeout = 10.0
+    consumer_poll_timeout = 5.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
     message_queue = []
 
@@ -188,6 +188,7 @@ def kafka_event_loop(
             except Exception as exception:
                 logger.error(f'notification error: {exception}')
 
+    logger.info(f'consumer unsubscribe')
     consumer.unsubscribe()
     consumer.close()
 
@@ -450,7 +451,7 @@ def upload_data_to_s3(
         boto3_session.client(
             's3',
             endpoint_url=minio_url,
-            config=botocore.Config(signature_version='s3v4'),
+            config=botocore.config.Config(signature_version='s3v4'),
         )
     )
     try:
@@ -491,11 +492,11 @@ def update_database_s3(
             .one()
         )
 
-        row.download_start_datetime = download_upload_statistics.download_start_timestamp
+        row.download_start_timestamp = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
         row.s3_tmp_bucket = download_upload_statistics.s3_bucket
         row.s3_tmp_object_key = download_upload_statistics.s3_object_key
-        row.s3_upload_to_tmp_bucket_start_datetime = download_upload_statistics.s3_upload_start_timestamp
+        row.s3_upload_to_tmp_bucket_start_timestamp = download_upload_statistics.s3_upload_start_timestamp
         row.s3_upload_to_tmp_bucket_duration = download_upload_statistics.s3_upload_duration
 
         session.commit()
@@ -514,8 +515,8 @@ def update_database_sha256sum(
             .one()
         )
 
-        row.sha256sum_start_datetime = hash_statistics.hash_start_timestamp
-        row.sha256sum_duration = hash_statistics.hash_complete_timestamp
+        row.sha256sum_start_timestamp = hash_statistics.hash_start_timestamp
+        row.sha256sum_duration = hash_statistics.hash_duration
         row.sha256sum = hash_statistics.hash_hex_str
 
         session.commit()
@@ -596,3 +597,4 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
