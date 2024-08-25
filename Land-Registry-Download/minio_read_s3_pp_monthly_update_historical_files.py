@@ -251,9 +251,9 @@ def main():
             with Session(postgres_engine) as session:
                 data_timestamp = (
                     datetime(
-                        year=year,
-                        month=month,
-                        day=day,
+                        year=int(year),
+                        month=int(month),
+                        day=int(day),
                         tzinfo=timezone.utc,
                     )
                 )
