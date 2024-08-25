@@ -1,36 +1,45 @@
-#!/usr/bin/env python3
+
 
 from datetime import datetime
+from datetime import date
 from datetime import timedelta
 from datetime import timezone
 
-import os
 import jsons
 import signal
-import argparse
-
-from lib_land_registry_download.lib_cron import cron_get_next_schedule
-from lib_land_registry_download.lib_cron import cron_get_sleep_time
-from lib_land_registry_download.lib_cron import cron_get_sleep_time_timeout
-from lib_land_registry_download.lib_cron import cron_do_sleep
-
-from lib_land_registry_download.lib_kafka import create_producer
 
 from confluent_kafka import Producer
 
-from lib_land_registry_download.lib_topic_name import topic_name_land_registry_download_controller_notification
+from sqlalchemy import create_engine
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
-from lib_land_registry_download.lib_dto import CronTriggerNotificationDTO
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_CRON_TRIGGER
 
-import logging
-import sys
+from lib_land_registry_data.lib_topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
 
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_CRON_TRIGGER as PROCESS_NAME
-from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_CRON_TRIGGER as GROUP_ID
-from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_CRON_TRIGGER as CLIENT_ID
-from lib_land_registry_download.lib_constants.notification_type import DAILY_DOWNLOAD_TRIGGER
+from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 
+from lib_land_registry_data.lib_cron import cron_get_next_schedule
+from lib_land_registry_data.lib_cron import cron_get_sleep_time
+from lib_land_registry_data.lib_cron import cron_get_sleep_time_timeout
+from lib_land_registry_data.lib_cron import cron_sleep
 
+from lib_land_registry_data.lib_kafka import create_producer
+
+from lib_land_registry_data.lib_dto import CronTriggerNotificationDTO
+
+from lib_land_registry_data.lib_db import PPCompleteDownloadFileLog
+from lib_land_registry_data.lib_db import PPMonthlyUpdateDownloadFileLog
+
+from lib_land_registry_data.lib_env import EnvironmentVariables
+
+from lib_land_registry_data.logging import set_logger_process_name
+from lib_land_registry_data.logging import get_logger
+from lib_land_registry_data.logging import create_stdout_log_handler
+from lib_land_registry_data.logging import create_file_log_handler
+
+# TODO: update this doc
 # Processes:
 #
 # 1. Controller:
@@ -57,113 +66,171 @@ from lib_land_registry_download.lib_constants.notification_type import DAILY_DOW
 #   the messages sent to Kafka
 
 
-log = logging.getLogger(__name__)
 
-stdout_log_formatter = logging.Formatter(
-    '%(name)s: %(asctime)s | %(levelname)s | %(filename)s:%(lineno)s | %(process)d | %(message)s'
+set_logger_process_name(
+    process_name=PROCESS_NAME_CRON_TRIGGER,
 )
 
-stdout_log_handler = logging.StreamHandler(stream=sys.stdout)
-stdout_log_handler.setLevel(logging.INFO)
-stdout_log_handler.setFormatter(stdout_log_formatter)
-
-file_log_formatter = logging.Formatter(
-    '%(name)s: %(asctime)s | %(levelname)s | %(filename)s:%(lineno)s | %(process)d | %(message)s'
+logger = get_logger()
+stdout_log_handler = create_stdout_log_handler()
+file_log_handler = create_file_log_handler(
+    logger_process_name=PROCESS_NAME_CRON_TRIGGER,
+    logger_file_datetime=datetime.now(timezone.utc).date(),
 )
-
-file_log_handler = logging.FileHandler(
-    filename=f'{PROCESS_NAME}_{datetime.now(timezone.utc).date()}.log'
-)
-file_log_handler.setLevel(logging.DEBUG)
-file_log_handler.setFormatter(file_log_formatter)
-
-log.setLevel(logging.DEBUG)
-log.addHandler(stdout_log_handler)
-log.addHandler(file_log_handler)
-
-
-def parse_arguments() -> str:
-
-    # parse arguments
-    parser = argparse.ArgumentParser(
-        prog = 'LandRegistryDataDownloader',
-        description = 'Downloads Land Registry Price Paid Dataset',
-    )
-
-    parser.add_argument('--run-now', action = 'store_true')
-
-    args = parser.parse_args()
-    return args.run_now
+logger.addHandler(stdout_log_handler)
+logger.addHandler(file_log_handler)
 
 
 def main():
-    log.info(f'{PROCESS_NAME} start')
+    logger.info(f'{PROCESS_NAME_CRON_TRIGGER} start')
 
-    log.info(f'read environment variables')
-    kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
-    log.info(f'env: KAFKA_BOOTSTRAP_SERVERS={kafka_bootstrap_servers}')
+    environment_variables = EnvironmentVariables()
+    kafka_bootstrap_servers = environment_variables.get_kafka_bootstrap_servers()
+    postgres_connection_string = environment_variables.get_postgres_connection_string()
 
-    log.info(f'parse arguments')
-    run_now = parse_arguments()
-
-    log.info(f'create producer')
+    logger.info(f'create producer')
     producer = create_producer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=CLIENT_ID,
+        client_id=PROCESS_NAME_CRON_TRIGGER,
     )
 
-    log.info(f'run controller process')
-    run_controller_process(producer, run_now)
+    logger.info(f'create engine')
+    postgres_engine = create_engine(postgres_connection_string)
+
+    logger.info(f'run controller process')
+    run_controller_process(producer, postgres_engine)
 
 
-def run_controller_process(producer: Producer, run_now: bool) -> None:
-    first_run = True
+def manual_trigger(
+    producer: Producer,
+    postgres_engine: Engine,
+) -> None:
+    cron_trigger_datetime = datetime.now(timezone.utc)
+    cron_target_datetime = datetime.now(timezone.utc)
+    cron_target_date = cron_target_datetime.date()
+    (
+        pp_monthly_update_file_log_id,
+        pp_complete_file_log_id,
+    )= update_database(
+        postgres_engine,
+        cron_target_date=cron_target_date,
+        cron_target_datetime=cron_target_datetime,
+        cron_trigger_datetime=cron_trigger_datetime,
+    )
+    logger.info(f'database updated')
 
-    # TODO: shutdown signal
+    notify_trigger(
+        producer=producer,
+        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_complete_file_log_id=pp_complete_file_log_id,
+    )
+    logger.info(f'notification sent')
+
+def run_controller_process(
+    producer: Producer,
+    postgres_engine: Engine,
+) -> None:
     global exit_flag
 
+    # manual_trigger(
+    #     producer=producer,
+    #     postgres_engine=postgres_engine,
+    # )
+    # return
+
     while not exit_flag:
-        if first_run and run_now:
-            first_run = False
-        else:
-            log.info(f'{datetime.now(timezone.utc)}: waiting for CRON')
+        logger.info(f'waiting for CRON')
+
+        now = datetime.now(timezone.utc)
+        next_schedule = cron_get_next_schedule(now)
+        logger.info(f'next_schedule = {next_schedule}')
+
+        # only used to log total sleep duration
+        sleep_timedelta = cron_get_sleep_time(now, next_schedule)
+        logger.info(f'sleep for {sleep_timedelta}')
+
+        while True:
+            if exit_flag:
+                logger.info(f'process exit')
+                return
 
             now = datetime.now(timezone.utc)
-            next_schedule = cron_get_next_schedule(now)
-            log.info(f'next_schedule = {next_schedule}')
+            if now >= next_schedule:
+                break
 
-            # only used to log total sleep duration
-            sleep_timedelta = cron_get_sleep_time(now, next_schedule)
-            log.info(f'sleep for {sleep_timedelta}')
+            sleep_timedelta = cron_get_sleep_time_timeout(now, next_schedule, timeout=timedelta(seconds=5))
+            cron_sleep(sleep_timedelta)
 
-            while True:
-                if exit_flag:
-                    log.info(f'{datetime.now(timezone.utc)}: process exit')
-                    return
+        cron_trigger_datetime = datetime.now(timezone.utc)
+        cron_target_datetime = next_schedule
+        cron_target_date = next_schedule.date()
+        (
+            pp_monthly_update_file_log_id,
+            pp_complete_file_log_id,
+        )= update_database(
+            postgres_engine,
+            cron_target_date=cron_target_date,
+            cron_target_datetime=cron_target_datetime,
+            cron_trigger_datetime=cron_trigger_datetime,
+        )
+        logger.info(f'database updated')
 
-                now = datetime.now(timezone.utc)
-                if now >= next_schedule:
-                    break
+        notify_trigger(
+            producer=producer,
+            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_complete_file_log_id=pp_complete_file_log_id,
+        )
+        logger.info(f'notification sent')
 
-                sleep_timedelta = cron_get_sleep_time_timeout(now, next_schedule, timeout=timedelta(seconds=10))
-                cron_do_sleep(sleep_timedelta)
-
-        notify_trigger(producer)
-
-        log.info(f'{datetime.now(timezone.utc)}: notification sent')
-
-    log.info(f'{datetime.now(timezone.utc)}: process exit')
+    logger.info(f'process exit')
 
 
-def notify_trigger(producer: Producer) -> None:
-
+def update_database(
+    engine: Engine,
+    cron_target_date: date,
+    cron_target_datetime: datetime,
+    cron_trigger_datetime: datetime,
+) -> tuple[int, int]:
     now = datetime.now(timezone.utc)
 
+    with Session(engine) as session:
+        row = PPCompleteDownloadFileLog(
+            created_datetime=now,
+            cron_target_date=cron_target_date,
+            cron_target_datetime=cron_target_datetime,
+            cron_trigger_datetime=cron_trigger_datetime,
+        )
+        session.add(row)
+        session.commit()
+
+        pp_complete_file_log_id = row.pp_complete_file_log_id
+
+    with Session(engine) as session:
+        row = PPMonthlyUpdateDownloadFileLog(
+            created_datetime=now,
+            cron_target_date=cron_target_date,
+            cron_target_datetime=cron_target_datetime,
+            cron_trigger_datetime=cron_trigger_datetime,
+        )
+        session.add(row)
+        session.commit()
+
+        pp_monthly_update_file_log_id = row.pp_monthly_update_file_log_id
+
+    return (pp_monthly_update_file_log_id, pp_complete_file_log_id)
+
+
+def notify_trigger(
+    producer: Producer,
+    pp_complete_file_log_id: int,
+    pp_monthly_update_file_log_id: int,
+) -> None:
     document = CronTriggerNotificationDTO(
-        notification_source=PROCESS_NAME,
-        notification_type=DAILY_DOWNLOAD_TRIGGER,
-        timestamp=now,
-        timestamp_cron_trigger=now,
+        notification_source=PROCESS_NAME_CRON_TRIGGER,
+        notification_type=NOTIFICATION_TYPE_CRON_TRIGGER,
+        notification_timestamp=datetime.now(timezone.utc),
+        pp_complete_file_log_id=pp_complete_file_log_id,
+        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
     )
 
     document_json_str = jsons.dumps(
@@ -172,11 +239,10 @@ def notify_trigger(producer: Producer) -> None:
     )
 
     producer.produce(
-        topic=topic_name_land_registry_download_controller_notification,
+        topic=TOPIC_NAME_CRON_TRIGGER_NOTIFICATION,
         key=f'no_key',
         value=document_json_str
     )
-
     producer.flush()
 
 
@@ -188,7 +254,7 @@ def ctrl_c_signal_handler(signal, frame):
     exit_flag = True
 
 def sigterm_signal_handler(signal, frame):
-    log.info(f'SIGTERM')
+    logger.info(f'SIGTERM')
     global exit_flag
     exit_flag = True
 
@@ -197,4 +263,5 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
 

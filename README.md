@@ -143,7 +143,7 @@ The subdirectories of this repository are described here:
 - `/initialize_database`: Contains process to perform the initial database initialization using a copy of `pp-complete.txt`
 - `/data`: Contains the column header names for tables. TODO: check if still used
 - `/install`: Contains installer bash script
-- `/lib_land_registry_download`: Python package (library) for common code required by each process
+- `/lib_land_registry_data`: Python package (library) for common code required by each process
 - `/sql`: SQL scripts for database table creation
 - `/systemd-scripts`: Helper scripts for systemd
 - `/systemd-unit-service-files`: Service files for systemd units, one for each process managed by systemd
