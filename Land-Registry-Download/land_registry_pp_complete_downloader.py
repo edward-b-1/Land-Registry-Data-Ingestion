@@ -116,7 +116,7 @@ def kafka_event_loop(
 
     logger.info(f'consumer subscribing to topic {TOPIC_NAME_CRON_TRIGGER_NOTIFICATION}')
     consumer.subscribe([TOPIC_NAME_CRON_TRIGGER_NOTIFICATION])
-    consumer_poll_timeout = 10.0
+    consumer_poll_timeout = 5.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
     message_queue = []
 
@@ -251,7 +251,7 @@ def get_cron_target_date_from_database(
         row = (
             session
             .query(PPCompleteDownloadFileLog)
-            .filter_by(pp_monthly_update_file_log_id=pp_complete_file_log_id)
+            .filter_by(pp_complete_file_log_id=pp_complete_file_log_id)
             .one()
         )
         cron_target_date = row.cron_target_date
@@ -358,7 +358,7 @@ def download_pp_complete_and_upload_to_s3(
 
         update_database_s3(
             engine_postgres=engine_postgres,
-            pp_monthly_update_file_log_id=pp_complete_file_log_id,
+            pp_complete_file_log_id=pp_complete_file_log_id,
             download_upload_statistics=download_upload_statistics,
         )
 
@@ -378,7 +378,7 @@ def download_pp_complete_and_upload_to_s3(
 
         update_database_sha256sum(
             engine_postgres=engine_postgres,
-            pp_comlete_file_log_id=pp_complete_file_log_id,
+            pp_complete_file_log_id=pp_complete_file_log_id,
             hash_statistics=hash_statistics,
         )
 
@@ -429,7 +429,7 @@ def upload_data_to_s3(
         boto3_session.client(
             's3',
             endpoint_url=minio_url,
-            config=botocore.Config(signature_version='s3v4'),
+            config=botocore.config.Config(signature_version='s3v4'),
         )
     )
     try:
@@ -459,22 +459,22 @@ def upload_data_to_s3(
 
 def update_database_s3(
     engine_postgres: Engine,
-    pp_comlete_file_log_id: int,
+    pp_complete_file_log_id: int,
     download_upload_statistics: DownloadUploadStatistics
 ) -> None:
     with Session(engine_postgres) as session:
         row = (
             session
             .query(PPCompleteDownloadFileLog)
-            .filter_by(pp_comlete_file_log_id=pp_comlete_file_log_id)
+            .filter_by(pp_complete_file_log_id=pp_complete_file_log_id)
             .one()
         )
 
-        row.download_start_datetime = download_upload_statistics.download_start_timestamp
+        row.download_start_timestamp = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
         row.s3_tmp_bucket = download_upload_statistics.s3_bucket
         row.s3_tmp_object_key = download_upload_statistics.s3_object_key
-        row.s3_upload_to_tmp_bucket_start_datetime = download_upload_statistics.s3_upload_start_timestamp
+        row.s3_upload_to_tmp_bucket_start_timestamp = download_upload_statistics.s3_upload_start_timestamp
         row.s3_upload_to_tmp_bucket_duration = download_upload_statistics.s3_upload_duration
 
         session.commit()
@@ -482,19 +482,19 @@ def update_database_s3(
 
 def update_database_sha256sum(
     engine_postgres: Engine,
-    pp_comlete_file_log_id: int,
+    pp_complete_file_log_id: int,
     hash_statistics: HashStatistics,
 ) -> None:
     with Session(engine_postgres) as session:
         row = (
             session
             .query(PPCompleteDownloadFileLog)
-            .filter_by(pp_comlete_file_log_id=pp_comlete_file_log_id)
+            .filter_by(pp_complete_file_log_id=pp_complete_file_log_id)
             .one()
         )
 
-        row.sha256sum_start_datetime = hash_statistics.hash_start_timestamp
-        row.sha256sum_duration = hash_statistics.hash_complete_timestamp
+        row.sha256sum_start_timestamp = hash_statistics.hash_start_timestamp
+        row.sha256sum_duration = hash_statistics.hash_duration
         row.sha256sum = hash_statistics.hash_hex_str
 
         session.commit()
@@ -521,7 +521,7 @@ def notify(
         notification_source=PROCESS_NAME_PP_COMPLETE_DOWNLOADER,
         notification_type=NOTIFICATION_TYPE_PP_COMPLETE_DOWNLOAD_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
-        pp_monthly_update_file_log_id=pp_complete_file_log_id,
+        pp_complete_file_log_id=pp_complete_file_log_id,
     )
 
     document_json_str = jsons.dumps(document, strip_privates=True)
@@ -575,3 +575,4 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
