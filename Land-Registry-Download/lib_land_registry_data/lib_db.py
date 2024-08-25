@@ -57,10 +57,8 @@ class PPCompleteDownloadFileLog(LandRegistryBase):
     s3_archive_action_taken: Mapped[Optional[str]]
     s3_archive_bucket: Mapped[Optional[str]]
     s3_archive_object_key: Mapped[Optional[str]]
-    s3_download_from_tmp_bucket_start_datetime: Mapped[Optional[datetime]]
-    s3_download_from_tmp_bucket_duration: Mapped[Optional[timedelta]]
-    s3_upload_to_archive_bucket_start_datetime: Mapped[Optional[datetime]]
-    s3_upload_to_archive_bucket_duration: Mapped[Optional[timedelta]]
+    s3_copy_start_datetime: Mapped[Optional[datetime]]
+    s3_copy_duration: Mapped[Optional[datetime]]
 
 
 class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
@@ -96,10 +94,8 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
     s3_archive_action_taken: Mapped[Optional[str]]
     s3_archive_bucket: Mapped[Optional[str]]
     s3_archive_object_key: Mapped[Optional[str]]
-    s3_download_from_tmp_bucket_start_datetime: Mapped[Optional[datetime]]
-    s3_download_from_tmp_bucket_duration: Mapped[Optional[timedelta]]
-    s3_upload_to_archive_bucket_start_datetime: Mapped[Optional[datetime]]
-    s3_upload_to_archive_bucket_duration: Mapped[Optional[timedelta]]
+    s3_copy_start_datetime: Mapped[Optional[datetime]]
+    s3_copy_duration: Mapped[Optional[datetime]]
 
 
 # NOTE:
@@ -120,14 +116,15 @@ class PPMonthlyUpdateArchiveFileLog(LandRegistryBase):
 
     created_datetime: Mapped[datetime]
 
-    file_type: Mapped[str] # `historical` or `current`
-    file_datetime: Mapped[datetime]
+    data_source: Mapped[str] # `historical` or `current`
+    data_timestamp: Mapped[datetime]
     s3_bucket: Mapped[str]
     s3_object_key: Mapped[str]
     sha256sum: Mapped[str]
+    # TODO: need a row for "what date the file is for: year-month-day"
 
-    database_update_start_datetime: Mapped[datetime]
-    database_update_duration: Mapped[timedelta]
+    database_update_start_datetime: Mapped[Optional[datetime]]
+    database_update_duration: Mapped[Optional[timedelta]]
 
 
 class PPCompleteArchiveFileLog(LandRegistryBase):
@@ -138,14 +135,15 @@ class PPCompleteArchiveFileLog(LandRegistryBase):
 
     created_datetime: Mapped[datetime]
 
-    file_type: Mapped[str] # `historical` or `current`
-    file_datetime: Mapped[datetime]
+    data_source: Mapped[str] # `historical` or `current`
+    data_timestamp: Mapped[datetime]
     s3_bucket: Mapped[str]
     s3_object_key: Mapped[str]
     sha256sum: Mapped[str]
+    # TODO: need a row for "what date the file is for: year-month-day"
 
-    database_upload_start_datetime: Mapped[datetime]
-    database_upload_duration: Mapped[timedelta]
+    database_upload_start_datetime: Mapped[Optional[datetime]]
+    database_upload_duration: Mapped[Optional[timedelta]]
 
 
 class PPDataConsistencyCheckLog(LandRegistryBase):
