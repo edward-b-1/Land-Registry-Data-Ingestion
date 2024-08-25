@@ -109,7 +109,7 @@ def kafka_event_loop(
 
     logger.info(f'consumer subscribing to topic {TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION}')
     consumer.subscribe([TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION])
-    consumer_poll_timeout = 10.0
+    consumer_poll_timeout = 5.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
 
     global exit_flag
@@ -135,6 +135,8 @@ def kafka_event_loop(
                 PPMonthlyUpdateDataDecisionNotificationDTO,
             )
 
+            pp_monthly_update_file_log_id = dto.pp_monthly_update_file_log_id
+
             try:
                 notification_type = dto.notification_type
                 logger.debug(f'notification type: {notification_type}')
@@ -149,6 +151,7 @@ def kafka_event_loop(
                         postgres_engine=postgres_engine,
                         boto3_session=boto3_session,
                         minio_url=minio_url,
+                        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
                     )
 
                 else:
@@ -167,57 +170,56 @@ def garbage_collect(
     postgres_engine: Engine,
     boto3_session,
     minio_url: str,
+    pp_monthly_update_file_log_id: int,
 ) -> None:
 
     with Session(postgres_engine) as session:
 
-        rows = (
+        row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
-            .filter(PPMonthlyUpdateDownloadFileLog.gc_action_taken.is_(None))
-            .all()
+            .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
+            .one()
         )
-        logger.info(f'querying database table PPMonthlyUpdateDownloadFileLog for rows with process_decision=\'garbage_collect\'')
-        logger.info(f'{len(rows)} match database query')
+        logger.info(f'querying database table PPMonthlyUpdateDownloadFileLog for rows with pp_monthly_update_file_log_id=\'{pp_monthly_update_file_log_id}\'')
 
-        for row in rows:
-            data_decision = row.data_decision
+        data_decision = row.data_decision
 
-            if data_decision == 'archive':
-                logger.info(f'row with data_decision={data_decision}, ignore')
-                row.gc_action_taken = 'ignore'
-                row.gc_datetime = datetime.now(timezone.utc)
-                session.commit()
+        if data_decision == 'archive':
+            logger.info(f'row with data_decision={data_decision}, ignore')
+            row.gc_action_taken = 'ignore'
+            row.gc_datetime = datetime.now(timezone.utc)
+            session.commit()
 
-            elif data_decision == 'garbage_collect':
-                logger.info(f'row with data_decision={data_decision}, run garbage collection')
+        elif data_decision == 'garbage_collect':
+            logger.info(f'row with data_decision={data_decision}, run garbage collection')
 
-                bucket = row.s3_tmp_bucket
-                object_key = row.s3_tmp_object_key
-                logger.info(f'delete file from s3 in bucket {bucket} with object key {object_key}')
+            bucket = row.s3_tmp_bucket
+            object_key = row.s3_tmp_object_key
+            logger.info(f'delete file from s3 in bucket {bucket} with object key {object_key}')
 
-                boto3_client = (
-                    boto3_session.client(
-                        's3',
-                        endpoint_url=minio_url,
-                        config=botocore.Config(signature_version='s3v4'),
-                    )
+            boto3_client = (
+                boto3_session.client(
+                    's3',
+                    endpoint_url=minio_url,
+                    config=botocore.config.Config(signature_version='s3v4'),
                 )
-                boto3_client.delete_object(Bucket=bucket, Key=object_key)
-
-                row.gc_action_taken = 'garbage_collect'
-                row.gc_datetime = datetime.now(timezone.utc)
-                session.commit()
-
-            else:
-                raise RuntimeError(f'invalid data_decision {data_decision}')
-
-            pp_monthly_update_file_log_id = row.pp_monthly_update_file_log_id
-
-            notify(
-                producer=producer,
-                pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
             )
+            boto3_client.delete_object(Bucket=bucket, Key=object_key)
+
+            row.gc_action_taken = 'garbage_collect'
+            row.gc_datetime = datetime.now(timezone.utc)
+            session.commit()
+
+        else:
+            raise RuntimeError(f'invalid data_decision {data_decision}')
+
+        pp_monthly_update_file_log_id = row.pp_monthly_update_file_log_id
+
+        notify(
+            producer=producer,
+            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        )
 
 
 def notify(
@@ -259,5 +261,6 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
 
 
