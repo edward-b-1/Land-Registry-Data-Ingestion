@@ -101,11 +101,42 @@ def main():
     run_controller_process(producer, postgres_engine)
 
 
+def manual_trigger(
+    producer: Producer,
+    postgres_engine: Engine,
+) -> None:
+    cron_trigger_datetime = datetime.now(timezone.utc)
+    cron_target_datetime = datetime.now(timezone.utc)
+    cron_target_date = cron_target_datetime.date()
+    (
+        pp_monthly_update_file_log_id,
+        pp_complete_file_log_id,
+    )= update_database(
+        postgres_engine,
+        cron_target_date=cron_target_date,
+        cron_target_datetime=cron_target_datetime,
+        cron_trigger_datetime=cron_trigger_datetime,
+    )
+    logger.info(f'database updated')
+
+    notify_trigger(
+        producer=producer,
+        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_complete_file_log_id=pp_complete_file_log_id,
+    )
+    logger.info(f'notification sent')
+
 def run_controller_process(
     producer: Producer,
-    engine: Engine,
+    postgres_engine: Engine,
 ) -> None:
     global exit_flag
+
+    # manual_trigger(
+    #     producer=producer,
+    #     postgres_engine=postgres_engine,
+    # )
+    # return
 
     while not exit_flag:
         logger.info(f'waiting for CRON')
@@ -127,7 +158,7 @@ def run_controller_process(
             if now >= next_schedule:
                 break
 
-            sleep_timedelta = cron_get_sleep_time_timeout(now, next_schedule, timeout=timedelta(seconds=10))
+            sleep_timedelta = cron_get_sleep_time_timeout(now, next_schedule, timeout=timedelta(seconds=5))
             cron_sleep(sleep_timedelta)
 
         cron_trigger_datetime = datetime.now(timezone.utc)
@@ -137,7 +168,7 @@ def run_controller_process(
             pp_monthly_update_file_log_id,
             pp_complete_file_log_id,
         )= update_database(
-            engine,
+            postgres_engine,
             cron_target_date=cron_target_date,
             cron_target_datetime=cron_target_datetime,
             cron_trigger_datetime=cron_trigger_datetime,
@@ -232,4 +263,5 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
 
