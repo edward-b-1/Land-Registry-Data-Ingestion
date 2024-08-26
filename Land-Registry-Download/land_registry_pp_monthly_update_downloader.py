@@ -18,6 +18,7 @@
     [DONE]
 '''
 
+import io
 import time
 import signal
 import threading
@@ -28,6 +29,7 @@ from datetime import datetime
 from datetime import date
 from datetime import timedelta
 from datetime import timezone
+import pandas
 
 from dataclasses import dataclass
 
@@ -63,6 +65,11 @@ from lib_land_registry_data.logging import set_logger_process_name
 from lib_land_registry_data.logging import get_logger
 from lib_land_registry_data.logging import create_stdout_log_handler
 from lib_land_registry_data.logging import create_file_log_handler
+
+from lib_land_registry_data.lib_datetime import convert_to_data_publish_datestamp
+from lib_land_registry_data.lib_datetime import convert_to_data_threshold_datestamp
+
+from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
 
 
 event_thead_terminate = threading.Event()
@@ -204,7 +211,7 @@ def process_message_queue(
     # TODO: can raise exception (but doesn't due to logic elsewhere)
     (
         run_download_flag,
-        pp_monthly_update_file_log_id,
+        pp_monthly_update_download_file_log_id,
     ) = process_message_queue_filter_for_download_trigger_message(message_queue)
 
     if run_download_flag:
@@ -213,12 +220,12 @@ def process_message_queue(
         thread_handle.start()
 
         cron_target_date = get_cron_target_date_from_database(
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
             engine_postgres=engine_postgres,
         )
 
         run_download_and_update_database_and_notify(
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
             cron_target_date=cron_target_date,
             producer=producer,
             boto3_session=boto3_session,
@@ -258,7 +265,7 @@ def process_message_queue_filter_for_download_trigger_message(
 
         notification_type = message.notification_type
         if notification_type == NOTIFICATION_TYPE_CRON_TRIGGER:
-            return (True, message.pp_monthly_update_file_log_id)
+            return (True, message.pp_monthly_update_download_file_log_id)
         else:
             raise RuntimeError(f'unknown notification type: {notification_type}')
     else:
@@ -266,14 +273,14 @@ def process_message_queue_filter_for_download_trigger_message(
 
 
 def get_cron_target_date_from_database(
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
     engine_postgres: Engine,
 ) -> date:
     with Session(engine_postgres) as session:
         row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
-            .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
+            .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
             .one()
         )
         cron_target_date = row.cron_target_date
@@ -281,7 +288,7 @@ def get_cron_target_date_from_database(
 
 
 def run_download_and_update_database_and_notify(
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
     cron_target_date: date,
     producer: Producer,
     boto3_session,
@@ -295,7 +302,7 @@ def run_download_and_update_database_and_notify(
         hash_statistics,
     ) = download_pp_monthly_update_and_upload_to_s3(
         cron_target_date=cron_target_date,
-        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
         engine_postgres=engine_postgres,
         boto3_session=boto3_session,
         minio_url=minio_url,
@@ -304,7 +311,7 @@ def run_download_and_update_database_and_notify(
     if success:
         notify(
             producer=producer,
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
         )
     else:
         logger.error(f'failed to download file, give up, will not try again')
@@ -331,7 +338,7 @@ class HashStatistics():
 
 def download_pp_monthly_update_and_upload_to_s3(
     cron_target_date: date,
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
     engine_postgres: Engine,
     boto3_session,
     minio_url: str,
@@ -342,7 +349,7 @@ def download_pp_monthly_update_and_upload_to_s3(
     while True:
         try:
             (
-                data,
+                pp_monthly_update_data,
                 download_start_timestamp,
                 download_complete_timestamp,
                 download_duration,
@@ -365,7 +372,12 @@ def download_pp_monthly_update_and_upload_to_s3(
             s3_upload_start_timestamp,
             s3_upload_complete_timestamp,
             s3_upload_duration,
-        ) = upload_data_to_s3(data, cron_target_date, boto3_session, minio_url)
+        ) = upload_data_to_s3(
+            pp_monthly_update_data=pp_monthly_update_data,
+            cron_target_date=cron_target_date,
+            boto3_session=boto3_session,
+            minio_url=minio_url,
+        )
 
         download_upload_statistics = DownloadUploadStatistics(
             download_start_timestamp=download_start_timestamp,
@@ -378,10 +390,25 @@ def download_pp_monthly_update_and_upload_to_s3(
             s3_object_key=s3_object_key,
         )
 
+        df = pandas.read_csv(
+            io.BytesIO(pp_monthly_update_data),
+            header=None,
+        )
+        df.columns = df_pp_monthly_update_columns
+        data_auto_datestamp = df['transaction_date'].max()
+        data_auto_datestamp = (
+            date(
+                year=data_auto_datestamp.year,
+                month=data_auto_datestamp.month,
+                day=data_auto_datestamp.day,
+            )
+        )
+
         update_database_s3(
             engine_postgres=engine_postgres,
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
             download_upload_statistics=download_upload_statistics,
+            data_auto_datestamp=data_auto_datestamp,
         )
 
         (
@@ -389,7 +416,7 @@ def download_pp_monthly_update_and_upload_to_s3(
             hash_complete_timestamp,
             hash_duration,
             sha256sum_hex_str,
-        ) = calculate_sha256sum(data)
+        ) = calculate_sha256sum(pp_monthly_update_data)
 
         hash_statistics = HashStatistics(
             hash_start_timestamp=hash_start_timestamp,
@@ -400,7 +427,7 @@ def download_pp_monthly_update_and_upload_to_s3(
 
         update_database_sha256sum(
             engine_postgres=engine_postgres,
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+            pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
             hash_statistics=hash_statistics,
         )
 
@@ -481,19 +508,30 @@ def upload_data_to_s3(
 
 def update_database_s3(
     engine_postgres: Engine,
-    pp_monthly_update_file_log_id: int,
-    download_upload_statistics: DownloadUploadStatistics
+    pp_monthly_update_download_file_log_id: int,
+    download_upload_statistics: DownloadUploadStatistics,
+    data_auto_datestamp: date,
 ) -> None:
     with Session(engine_postgres) as session:
         row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
-            .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
+            .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
             .one()
         )
 
         row.download_start_timestamp = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
+
+        download_start_timestamp = row.download_start_timestamp
+        data_publish_datestamp = convert_to_data_publish_datestamp(download_start_timestamp)
+        data_threshold_datestamp = convert_to_data_threshold_datestamp(download_start_timestamp)
+        data_auto_datestamp = data_auto_datestamp
+
+        row.data_publish_datestamp = data_publish_datestamp
+        row.data_threshold_datestamp = data_threshold_datestamp
+        row.data_auto_datestamp = data_auto_datestamp
+
         row.s3_tmp_bucket = download_upload_statistics.s3_bucket
         row.s3_tmp_object_key = download_upload_statistics.s3_object_key
         row.s3_upload_to_tmp_bucket_start_timestamp = download_upload_statistics.s3_upload_start_timestamp
@@ -504,14 +542,14 @@ def update_database_s3(
 
 def update_database_sha256sum(
     engine_postgres: Engine,
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
     hash_statistics: HashStatistics,
 ) -> None:
     with Session(engine_postgres) as session:
         row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
-            .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
+            .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
             .one()
         )
 
@@ -536,14 +574,15 @@ def calculate_sha256sum(data: bytes) -> tuple[datetime, datetime, timedelta, str
 
 def notify(
     producer: Producer,
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
 ) -> None:
+    logger.debug(f'sending notification')
 
     dto = PPMonthlyUpdateDownloadCompleteNotificationDTO(
         notification_source=PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER,
         notification_type=NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
-        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
     )
 
     dto_json_str = jsons.dumps(dto, strip_privates=True)
@@ -554,6 +593,7 @@ def notify(
         value=dto_json_str,
     )
     producer.flush()
+    logger.debug(f'notification sent')
 
 
 def consumer_poll_loop(consumer: Consumer) -> None:
