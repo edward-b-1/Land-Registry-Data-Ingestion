@@ -15,20 +15,11 @@ class LandRegistryBase(DeclarativeBase):
     __table_args__ = {'schema': 'land_registry_2'}
 
 
-# class CronTriggerLog(LandRegistryBase):
-
-#     __tablename__ = 'cron_trigger_log'
-
-#     cron_trigger_log_id: Mapped[int] = mapped_column(primary_key=True)
-
-
-
-
 class PPCompleteDownloadFileLog(LandRegistryBase):
 
     __tablename__ = 'pp_complete_download_file_log'
 
-    pp_complete_file_log_id: Mapped[int] = mapped_column(primary_key=True)
+    pp_complete_download_file_log_id: Mapped[int] = mapped_column(primary_key=True)
 
     created_datetime: Mapped[datetime]
 
@@ -36,8 +27,11 @@ class PPCompleteDownloadFileLog(LandRegistryBase):
     cron_target_datetime: Mapped[datetime]
     cron_trigger_datetime: Mapped[datetime]
 
-    download_start_timestamp: Mapped[Optional[datetime]]
+    download_start_timestamp: Mapped[Optional[datetime]] # aka data_download_timestamp
     download_duration: Mapped[Optional[timedelta]]
+    data_publish_datestamp: Mapped[Optional[date]] # 20th day of current month or last month
+    data_threshold_datestamp: Mapped[Optional[date]] # last day of last month - careful, rolls over on 20th!
+    data_auto_datestamp: Mapped[Optional[date]] # detected from file contents
     s3_tmp_bucket: Mapped[Optional[str]]
     s3_tmp_object_key: Mapped[Optional[str]]
     s3_upload_to_tmp_bucket_start_timestamp: Mapped[Optional[datetime]]
@@ -65,7 +59,7 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
 
     __tablename__ = 'pp_monthly_update_download_file_log'
 
-    pp_monthly_update_file_log_id: Mapped[int] = mapped_column(primary_key=True)
+    pp_monthly_update_download_file_log_id: Mapped[int] = mapped_column(primary_key=True)
 
     created_datetime: Mapped[datetime]
 
@@ -73,8 +67,11 @@ class PPMonthlyUpdateDownloadFileLog(LandRegistryBase):
     cron_target_datetime: Mapped[datetime]
     cron_trigger_datetime: Mapped[datetime]
 
-    download_start_timestamp: Mapped[Optional[datetime]]
+    download_start_timestamp: Mapped[Optional[datetime]] # aka data_download_timestamp
     download_duration: Mapped[Optional[timedelta]]
+    data_publish_datestamp: Mapped[Optional[date]] # 20th day of current month or last month
+    data_threshold_datestamp: Mapped[Optional[date]] # last day of last month - careful, rolls over on 20th!
+    data_auto_datestamp: Mapped[Optional[date]] # detected from file contents
     s3_tmp_bucket: Mapped[Optional[str]]
     s3_tmp_object_key: Mapped[Optional[str]]
     s3_upload_to_tmp_bucket_start_timestamp: Mapped[Optional[datetime]]
@@ -117,7 +114,10 @@ class PPMonthlyUpdateArchiveFileLog(LandRegistryBase):
     created_datetime: Mapped[datetime]
 
     data_source: Mapped[str] # `historical` or `current`
-    data_timestamp: Mapped[datetime]
+    data_download_timestamp: Mapped[datetime]
+    data_publish_datestamp: Mapped[Optional[date]] # 20th day of current month or last month
+    data_threshold_datestamp: Mapped[Optional[date]] # last day of last month - careful, rolls over on 20th!
+    data_auto_datestamp: Mapped[Optional[date]] # detected from file contents
     s3_bucket: Mapped[str]
     s3_object_key: Mapped[str]
     sha256sum: Mapped[str]
@@ -136,7 +136,10 @@ class PPCompleteArchiveFileLog(LandRegistryBase):
     created_datetime: Mapped[datetime]
 
     data_source: Mapped[str] # `historical` or `current`
-    data_timestamp: Mapped[datetime]
+    data_download_timestamp: Mapped[datetime]
+    data_publish_datestamp: Mapped[Optional[date]] # 20th day of current month or last month
+    data_threshold_datestamp: Mapped[Optional[date]] # last day of last month - careful, rolls over on 20th!
+    data_auto_datestamp: Mapped[Optional[date]] # detected from file contents
     s3_bucket: Mapped[str]
     s3_object_key: Mapped[str]
     sha256sum: Mapped[str]
@@ -175,32 +178,68 @@ class PPDataReconciliationLog(LandRegistryBase):
 
     # TODO: other fields...
 
-# class PricePaidData(LandRegistryBase):
 
-#     __tablename__ = 'price_paid_data'
+class PPCompleteData(LandRegistryBase):
 
-#     price_paid_data_id: Mapped[int] = mapped_column(primary_key=True)
-#     transaction_unique_id: Mapped[str]
-#     price: Mapped[int]
-#     transaction_date: Mapped[datetime]
-#     postcode: Mapped[str]
-#     property_type: Mapped[str]
-#     new_tag: Mapped[str]
-#     lease: Mapped[str]
-#     primary_address_object_name: Mapped[str]
-#     secondary_address_object_name: Mapped[str]
-#     street: Mapped[str]
-#     locality: Mapped[str]
-#     town_city: Mapped[str]
-#     district: Mapped[str]
-#     county: Mapped[str]
-#     ppd_cat: Mapped[str]
-#     #record_status: Mapped[str]
-#     file_date: Mapped[date]
-#     is_deleted: Mapped[str]
-#     created_datetime: Mapped[datetime]
-#     updated_datetime: Mapped[datetime]
-#     deleted_datetime: Mapped[datetime]
+    __tablename__ = 'pp_complete_data'
+
+    price_paid_data_id: Mapped[int] = mapped_column(primary_key=True)
+    transaction_unique_id: Mapped[str]
+    price: Mapped[int]
+    transaction_date: Mapped[datetime]
+    postcode: Mapped[str]
+    property_type: Mapped[str]
+    new_tag: Mapped[str]
+    lease: Mapped[str]
+    primary_address_object_name: Mapped[str]
+    secondary_address_object_name: Mapped[str]
+    street: Mapped[str]
+    locality: Mapped[str]
+    town_city: Mapped[str]
+    district: Mapped[str]
+    county: Mapped[str]
+    ppd_cat: Mapped[Optional[str]]
+    record_op: Mapped[str]
+    data_datestamp: Mapped[date]
+    data_publish_datestamp: Mapped[date]
+    data_threshold_datestamp: Mapped[date]
+    data_auto_datestamp: Mapped[date]
+    created_datetime: Mapped[datetime] # Time row with UUID first created
+
+
+class PPMonthlyData(LandRegistryBase):
+
+    __tablename__ = 'pp_monthly_data'
+
+    price_paid_data_id: Mapped[int] = mapped_column(primary_key=True)
+    transaction_unique_id: Mapped[str]
+    price: Mapped[int]
+    transaction_date: Mapped[datetime]
+    postcode: Mapped[str]
+    property_type: Mapped[str]
+    new_tag: Mapped[str]
+    lease: Mapped[str]
+    primary_address_object_name: Mapped[str]
+    secondary_address_object_name: Mapped[str]
+    street: Mapped[str]
+    locality: Mapped[str]
+    town_city: Mapped[str]
+    district: Mapped[str]
+    county: Mapped[str]
+    ppd_cat: Mapped[Optional[str]]
+    record_op: Mapped[str]
+    data_datestamp: Mapped[date]
+    data_publish_datestamp: Mapped[date]
+    data_threshold_datestamp: Mapped[date]
+    data_auto_datestamp: Mapped[date]
+    insert_op_count: Mapped[int] # Insert op count
+    update_op_count: Mapped[int] # Update op count
+    delete_op_count: Mapped[int] # Delete op count
+    created_datetime: Mapped[datetime] # Time row with UUID first created
+    inserted_datetime: Mapped[datetime] # Last time row with UUID insert op
+    updated_datetime: Mapped[Optional[datetime]] # Last time row with UUID updated op
+    deleted_datetime: Mapped[Optional[datetime]] # Last time row with UUID deleted op
+    is_deleted: Mapped[bool]
 
 
 # class PricePaidDataLog(LandRegistryBase):

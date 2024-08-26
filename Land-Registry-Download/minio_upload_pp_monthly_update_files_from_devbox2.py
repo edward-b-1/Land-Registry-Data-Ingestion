@@ -34,17 +34,25 @@ import os
 import hashlib
 import boto3
 import botocore
+import pandas
 
 from datetime import datetime
+from datetime import date
 from datetime import timezone
 
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
 
 from lib_land_registry_data.lib_db import PPMonthlyUpdateArchiveFileLog
 from lib_land_registry_data.lib_env import EnvironmentVariables
+
+from lib_land_registry_data.lib_datetime import convert_to_data_publish_datestamp
+from lib_land_registry_data.lib_datetime import convert_to_data_threshold_datestamp
+
+from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
 
 
 def is_leapyear(year: int) -> bool:
@@ -164,6 +172,14 @@ def main():
 
                 print(f'file is stamped with date: {year}-{month}-{day}')
 
+                data_download_date = (
+                    date(
+                        year=year,
+                        month=month,
+                        day=day,
+                    )
+                )
+
                 # # wind back to last day of last month
                 # month = month - 1 if month > 1 else 12
                 # year = year if month > 1 else year - 1
@@ -177,7 +193,7 @@ def main():
                 # rename and send to s3
                 renamed_filename = f'pp-monthly-update-{year}-{month}-{day}.txt'
                 print(f'renamed: {renamed_filename}')
-                data_timestamp = (
+                data_download_timestamp = (
                     datetime(
                         year=int(year),
                         month=int(month),
@@ -186,12 +202,33 @@ def main():
                     )
                 )
 
+                data_publish_datestamp = convert_to_data_publish_datestamp(data_download_timestamp)
+                data_threshold_datestamp = convert_to_data_threshold_datestamp(data_download_timestamp)
+
+                df = pandas.read_csv(
+                    file,
+                    header=None,
+                )
+                # TODO: some files have 15 columns not 16
+                df.columns = df_pp_monthly_update_columns
+                data_auto_datestamp = df['transaction_date'].max()
+                data_auto_datestamp = (
+                    date(
+                        year=data_auto_datestamp.year,
+                        month=data_auto_datestamp.month,
+                        day=data_auto_datestamp.day,
+                    )
+                )
+
                 boto3_client.upload_file(file, 'land-registry-data-archive', renamed_filename)
 
                 row = PPMonthlyUpdateArchiveFileLog(
                     created_datetime=now_timestamp,
                     data_source='current',
-                    data_timestamp=data_timestamp,
+                    data_download_timestamp=data_download_timestamp,
+                    data_publish_datestamp=data_publish_datestamp,
+                    data_threshold_datestamp=data_threshold_datestamp,
+                    data_auto_datestamp=data_auto_datestamp,
                     s3_bucket='land-registry-data-archive',
                     s3_object_key=renamed_filename,
                     sha256sum=sha256,

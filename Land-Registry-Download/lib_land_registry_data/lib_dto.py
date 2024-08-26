@@ -15,9 +15,9 @@ class CronTriggerNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_complete_file_log_id: int
-    pp_monthly_update_file_log_id: int
+
+    pp_complete_download_file_log_id: int
+    pp_monthly_update_download_file_log_id: int
 
 
 @dataclass
@@ -30,9 +30,9 @@ class PPCompleteDownloadCompleteNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_complete_file_log_id: int
-    
+
+    pp_complete_download_file_log_id: int
+
 
 @dataclass
 class PPMonthlyUpdateDownloadCompleteNotificationDTO():
@@ -44,8 +44,8 @@ class PPMonthlyUpdateDownloadCompleteNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_monthly_update_file_log_id: int
+
+    pp_monthly_update_download_file_log_id: int
 
 
 @dataclass
@@ -58,8 +58,8 @@ class PPCompleteDataDecisionNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_complete_file_log_id: int
+
+    pp_complete_download_file_log_id: int
 
 
 @dataclass
@@ -72,8 +72,8 @@ class PPMonthlyUpdateDataDecisionNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_monthly_update_file_log_id: int
+
+    pp_monthly_update_download_file_log_id: int
 
 
 @dataclass
@@ -85,8 +85,8 @@ class PPCompleteGCNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_complete_file_log_id: int
+
+    pp_complete_download_file_log_id: int
 
 
 @dataclass
@@ -98,8 +98,8 @@ class PPMonthlyUpdateGCNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_monthly_update_file_log_id: int
+
+    pp_monthly_update_download_file_log_id: int
 
 
 @dataclass
@@ -111,8 +111,8 @@ class PPCompleteArchiveNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_complete_file_log_id: int
+
+    pp_complete_archive_file_log_id: int
 
 
 @dataclass
@@ -124,8 +124,34 @@ class PPMonthlyUpdateArchiveNotificationDTO():
     notification_source: str
     notification_type: str
     notification_timestamp: datetime
-    
-    pp_monthly_update_file_log_id: int
+
+    pp_monthly_update_archive_file_log_id: int
+
+
+@dataclass
+class PPCompleteDatabaseUploadNotificationDTO():
+    '''
+    Notification that database upload process has been completed
+    '''
+
+    notification_source: str
+    notification_type: str
+    notification_timestamp: datetime
+
+    pp_complete_archive_file_log_id: int
+
+
+@dataclass
+class PPMonthlyUpdateDatabaseUpdateNotificationDTO():
+    '''
+    Notification that database update process has been completed
+    '''
+
+    notification_source: str
+    notification_type: str
+    notification_timestamp: datetime
+
+    pp_monthly_update_archive_file_log_id: int
 
 
 # @dataclass
@@ -138,7 +164,7 @@ class PPMonthlyUpdateArchiveNotificationDTO():
 #     notification_source: str
 #     notification_type: str
 #     notification_timestamp: datetime
-    
+
 #     filename: str
 #     sha256sum: str
 #     data_decision: str

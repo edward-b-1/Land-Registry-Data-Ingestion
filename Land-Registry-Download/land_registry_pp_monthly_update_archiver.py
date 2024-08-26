@@ -143,16 +143,14 @@ def kafka_event_loop(
                 if notification_type == NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE:
                     logger.info(f'run archive process')
 
-                    pp_monthly_update_file_log_id = dto.pp_monthly_update_file_log_id
+                    pp_monthly_update_download_file_log_id = dto.pp_monthly_update_download_file_log_id
 
-                    # new notification documents just trigger the garbage collection
-                    # process for all old files
                     archive(
                         producer=producer,
                         postgres_engine=postgres_engine,
                         boto3_session=boto3_session,
                         minio_url=minio_url,
-                        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+                        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
                     )
 
                 else:
@@ -171,7 +169,7 @@ def archive(
     postgres_engine: Engine,
     boto3_session,
     minio_url: str,
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
 ) -> None:
 
     with Session(postgres_engine) as session:
@@ -179,10 +177,10 @@ def archive(
         row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
-            .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
+            .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
             .one()
         )
-        logger.info(f'querying database table PPMonthlyUpdateDownloadFileLog for rows with pp_monthly_update_file_log_id=\'{pp_monthly_update_file_log_id}\'')
+        logger.info(f'querying database table PPMonthlyUpdateDownloadFileLog for rows with {pp_monthly_update_download_file_log_id=}')
 
         data_decision = row.data_decision
 
@@ -228,25 +226,31 @@ def archive(
             session.commit()
 
             download_start_timestamp = row.download_start_timestamp
-
-            data_timestamp = (
-                datetime(
-                    year=download_start_timestamp.year,
-                    month=download_start_timestamp.month,
-                    day=download_start_timestamp.day,
-                    tzinfo=timezone.utc,
-                )
-            )
+            data_publish_datestamp = row.data_publish_datestamp
+            data_threshold_datestamp = row.data_threshold_datestamp
+            data_auto_datestamp = row.data_auto_datestamp
+            sha256sum = row.sha256sum
 
             row = PPMonthlyUpdateArchiveFileLog(
                 created_datetime=datetime.now(timezone.utc),
                 data_source='current',
-                data_timestamp=data_timestamp,
+                data_download_timestamp=download_start_timestamp,
+                data_publish_datestamp=data_publish_datestamp,
+                data_threshold_datestamp=data_threshold_datestamp,
+                data_auto_datestamp=data_auto_datestamp,
                 s3_bucket=bucket_archive,
                 s3_object_key=object_key,
+                sha256sum=sha256sum,
             )
             session.add(row)
             session.commit()
+
+            pp_monthly_update_archive_file_log_id = row.pp_monthly_update_archive_file_log_id
+
+            notify(
+                producer=producer,
+                pp_monthly_update_archive_file_log_id=pp_monthly_update_archive_file_log_id,
+            )
 
         elif data_decision == 'garbage_collect':
             logger.info(f'row with data_decision={data_decision}, ignore')
@@ -257,24 +261,18 @@ def archive(
         else:
             raise RuntimeError(f'invalid data_decision {data_decision}')
 
-        pp_monthly_update_file_log_id = row.pp_monthly_update_file_log_id
-
-        notify(
-            producer=producer,
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
-        )
-
 
 def notify(
     producer: Producer,
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_archive_file_log_id: int,
 ) -> None:
+    logger.debug(f'sending notification')
 
     dto = PPMonthlyUpdateArchiveNotificationDTO(
         notification_source=PROCESS_NAME_PP_MONTHLY_UPDATE_ARCHIVER,
         notification_type=NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_ARCHIVE_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
-        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_monthly_update_archive_file_log_id=pp_monthly_update_archive_file_log_id,
     )
 
     dto_json_str = jsons.dumps(dto, strip_privates=True)
@@ -285,6 +283,7 @@ def notify(
         value=dto_json_str,
     )
     producer.flush()
+    logger.debug(f'notification sent')
 
 
 exit_flag = False

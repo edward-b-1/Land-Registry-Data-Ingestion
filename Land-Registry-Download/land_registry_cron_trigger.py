@@ -109,8 +109,8 @@ def manual_trigger(
     cron_target_datetime = datetime.now(timezone.utc)
     cron_target_date = cron_target_datetime.date()
     (
-        pp_monthly_update_file_log_id,
-        pp_complete_file_log_id,
+        pp_monthly_update_download_file_log_id,
+        pp_complete_download_file_log_id,
     )= update_database(
         postgres_engine,
         cron_target_date=cron_target_date,
@@ -121,8 +121,8 @@ def manual_trigger(
 
     notify_trigger(
         producer=producer,
-        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
-        pp_complete_file_log_id=pp_complete_file_log_id,
+        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
+        pp_complete_download_file_log_id=pp_complete_download_file_log_id,
     )
     logger.info(f'notification sent')
 
@@ -165,8 +165,8 @@ def run_controller_process(
         cron_target_datetime = next_schedule
         cron_target_date = next_schedule.date()
         (
-            pp_monthly_update_file_log_id,
-            pp_complete_file_log_id,
+            pp_monthly_update_download_file_log_id,
+            pp_complete_download_file_log_id,
         )= update_database(
             postgres_engine,
             cron_target_date=cron_target_date,
@@ -177,8 +177,8 @@ def run_controller_process(
 
         notify_trigger(
             producer=producer,
-            pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
-            pp_complete_file_log_id=pp_complete_file_log_id,
+            pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
+            pp_complete_download_file_log_id=pp_complete_download_file_log_id,
         )
         logger.info(f'notification sent')
 
@@ -203,7 +203,7 @@ def update_database(
         session.add(row)
         session.commit()
 
-        pp_complete_file_log_id = row.pp_complete_file_log_id
+        pp_complete_download_file_log_id = row.pp_complete_download_file_log_id
 
     with Session(engine) as session:
         row = PPMonthlyUpdateDownloadFileLog(
@@ -215,22 +215,24 @@ def update_database(
         session.add(row)
         session.commit()
 
-        pp_monthly_update_file_log_id = row.pp_monthly_update_file_log_id
+        pp_monthly_update_download_file_log_id = row.pp_monthly_update_download_file_log_id
 
-    return (pp_monthly_update_file_log_id, pp_complete_file_log_id)
+    return (pp_monthly_update_download_file_log_id, pp_complete_download_file_log_id)
 
 
 def notify_trigger(
     producer: Producer,
-    pp_complete_file_log_id: int,
-    pp_monthly_update_file_log_id: int,
+    pp_complete_download_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
 ) -> None:
+    logger.debug(f'sending notification')
+
     document = CronTriggerNotificationDTO(
         notification_source=PROCESS_NAME_CRON_TRIGGER,
         notification_type=NOTIFICATION_TYPE_CRON_TRIGGER,
         notification_timestamp=datetime.now(timezone.utc),
-        pp_complete_file_log_id=pp_complete_file_log_id,
-        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_complete_download_file_log_id=pp_complete_download_file_log_id,
+        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
     )
 
     document_json_str = jsons.dumps(
@@ -244,6 +246,7 @@ def notify_trigger(
         value=document_json_str
     )
     producer.flush()
+    logger.debug(f'notification sent')
 
 
 exit_flag = False

@@ -3,17 +3,19 @@ Land Registry Data Ingestion System
 
 ## Technology List
 
-- Kafka
-- Postgres
 - Python
+- Docker
+- Linux
+- Kafka
+- Postgres (database)
 - Jypyter
 - Pandas
 - Threading, multithread processing, inter-thread signals
 - sqlalchemy
-- sqlite3 (sort of)
-- CRON (from within Python)
-- systemd, Linux
+- CRON (Python `croniter`)
 - Python logging framework
+- systemd (older versions)
+- sqlite3 (older versions)
 
 
 # What?
@@ -25,7 +27,9 @@ This is a data ingestion system which downloads data from the Land Registry and 
 
 The easiest way to obtain the Land Registry data would be to simply download the complete file from the website. (`pp-complete.txt`) It would be relatively trivial to build a single process which simply downloads the data on a per-day or per-month basis. However, how would we implement such a data source with a database?
 
-The intention is to store this data in a PostgreSQL database such that it can be queried. The alternative would be to build an analysis code which starts by loading the entire file from disk into a Pandas dataframe. This is not only slow, but consumes significant quantities of memory. Storing the data in a queryable database is useful as often an analysis will focus on one category of data, for example data for flats or properties sold during a particular period of time. Therefore this system is designed to ingest data to a SQL database.
+The intention is to store this data in a PostgreSQL database such that it can be queried. The alternative would be to build an analysis code which starts by loading the entire file from disk into a Pandas dataframe. The latter option would not only be slow, but would also consume significant quantities of memory.
+
+Storing the data in a queryable database is useful as often an analysis will focus on one category of data. For example, one analysis may focus on a subset of data, such as flat prices or prices of properties sold during a particular period of time. Therefore this system is designed to ingest data to a SQL database such that a subset of data can be queried.
 
 
 # How?
@@ -36,11 +40,13 @@ The Land Registry publish the complete dataset `pp-complete.txt` each month. A m
 
 This would be possible, but not particularly convenient. In particular, uploading the entire dataset takes about an hour, and the number of rows grows each month. While this method would work, it would create a period of downtime where the data in the database is not accessible because it has been deleted pending the upload of a new dataset.
 
-For a personal project, this is not really a concern, however part of the purpose of this is to show an example of a production-grade system which could be used by analysts 24/7 without downtime.
+For a personal project, this is not really a concern. However, one purpose of this project is to show an example of a production-grade system which could be used by analysts 24/7 without downtime.
 
-There is also another more important point. Data from the Land Registry is published monthly. However, this does not guarantee that once any months data has been published, that no new data will be added for that month at a later date. Indeed, in most cases, there is some unknown and variable delay between a property being sold, and the price paid data being updated in the dataset available here. In addition, changes can be made at any point in the future.
+There is another reason not to use the complete dataset published each month which is of more importance. Data from the Land Registry is published monthly. However, this does not guarantee that once any months data has been published, that no new data will be added for that month at a later date.
 
-From a practical standpoint of performing data analysis, there is no certain way to know as to what date data can be considered "reliable" or "mostly complete". Put another way, if the complete data file were to be downloaded on the 2024-07-01, there would likely be transactions for all (working) days before this date. However, if the data file is downloaded the next month, it is usually the case that a significant number of new rows will appear for transaction dates prior to 2024-07-01.
+In most cases, there is some unknown and variable delay between a property being sold, and the price paid data being updated in the dataset available here. In addition, changes can be made at any point in the future to correct existing issues in the data.
+
+From a practical standpoint of performing data analysis, there is no certain way to know as to what date data can be considered "reliable" or "mostly complete". Put another way, if the complete data file were to be downloaded on 2024-07-01, there would likely be transactions for all (working) days before this date. However, if the data file is downloaded the next month, it is usually the case that a significant number of new rows will appear for transaction dates prior to 2024-07-01.
 
 It is only by recording information about the date when data becomes available that an analysis can be performed to measure the expected distribution of delay times between a reported transaction date, and the data becoming available in the file downloaded from the Land Registry. The Land Registry data only contains transaction dates. It does not declare when any particular row of data was added. This is the primary reason why I built this system.
 
@@ -65,16 +71,22 @@ The data shown in the below figure is corrected for daily transaction volume by 
 
 # System Archetecture
 
-The system consists of a data ingestion pipeline. This is a number of processes which operate on a target data file in sequence. Processes communicate with each other by sending messages via Kafka. Some auxillary data is stored in database tables when it is useful to have this data in tabular format. The list of processes, in their order of operation are:
+The system consists of a data ingestion pipeline. This is a number of processes which communicate together via Kafka, which is a message broker. Each process runs inside a Docker container. This is mostly for deployment convenience.
 
-- Cron Trigger: (`land_registry_cron_trigger.py`) This process emits a message to Kafka triggered by a CRON schedule. Rather than using the Linux CRON system, a CRON Python library is used to generate a target datetime for when the process should next dispatch a message. The process uses `sleep` to wait until the target time.
-- Complete Download: (`land_registry_complete_downloader.py`) This process downloads the complete dataset `pp-complete.txt` when triggered by receiving a message from Kafka.
-- Monthly Update Download: (`land_registry_monthly_update_downloader.py`) This process downloads the incremental monthly update dataset when triggered by receiving a message from Kafka. This file then becomes the target file for the processes which follow.
-- SHA-256 Calculator: (`land_registry_monthly_update_sha256_calculator.py`) This process calcualtes the sha-256 sum of the target file. This is used to compare pairs of files across days. If the shasum of a downloaded file differs from the previous days file, then this implies the file contains new data which should be ingested to the database table.
-- Data Decision: (`land_registry_monthly_update_data_decision.py`) This process contains the logic to make a decision about what to do with the most recently downloaded file. It uses the calculated shasum values to decide if a file should be uploaded to the database or ignored and deleted.
-- Database Upload: (`land_registry_monthly_update_database_uploader.py`) This process reads the monthly update file and updates the database table with the new data if the previous data decision process has marked the file to be uploaded. Otherwise, the file is ignored, and a message is forwared to trigger the garbage collector.
-- Garbage Collector: (`land_registry_monthly_update_garbage_collector.py`) This process performs garbage collection of old files which were marked as containing no new data. Copies of the complete data (`pp-complete.txt`) are not currently deleted by this process. These files must be removed manually.
-- Data Verification: (`land_registry_database_verify.py`) This process is not part of the chain of processes which run automatically. It does not communicate via Kafka. It is a manually run process which verifies that the data in the complete data file (`pp-complete.txt`) matches that of the database. It does not attempt to perform any reconcilliation in the case of any differences, since the updates issued by the Land Registry to the complete file are not always synchronized with the release of a new monthly update file.
+Each process either operates on a file, manipulates one or more database tables, or performs both types of operation. Files are stored on a Minio instance, which is a self-hosted alternative to AWS S3. The database tables are stored in a Postgres database.
+
+The list of processes, in their order of operation are:
+
+- CRON Trigger: (`land_registry_cron_trigger`) This process emits a message to Kafka triggered by a CRON schedule. Rather than using the Linux CRON system, a CRON Python library is used to generate a target datetime for when the process should next dispatch a message. The process uses `sleep` to wait until the target time.
+- File Download Service: (`land_registry_pp_complete_download_service`, `land_registry_pp_monthly_update_download_service`) This pair of processes download the complete dataset `pp-complete.txt` and current month incremental update dataset `pp-monthly-update.txt`. These processes also save the data in a temporary storage space (an S3 bucket), calculate the SHA-256 sum of the data contained inside the files, and stores this information in a database table. The SHA-256 sum is used to compare pairs of files across days. If the shasum of a downloaded file differs from the previous days file, then this implies the file contains new data which should be ingested to the database table.
+- Data Decision Service: (`land_registry_pp_complete_data_decision_service`, `land_registry_pp_monthly_update_data_decision_service`) This pair of process contains logic decide what to do with the most recently downloaded files. It uses the calculated shasum hash values to decide if a file has been previously seen before, or contains new data. Files which have previously been seen before are discarded. File containing new data are processed further and the new data is uploaded to the database.
+- Garbage Collection (GC) Service: (`land_registry_pp_complete_gc_service`, `land_registry_pp_monthly_update_gc_service`) These processes perform garbage collection. They delete files which have been marked as containing no new data.
+- Archive Service: (`land_registry_pp_complete_archive_service`, `land_registry_pp_monthly_update_archive_service`) These processes perform file archiving. This simply means moving the file from a temporary storage location to the archive storage location. These are just two differently named S3 buckets.
+- Database Upload Service: (`land_registry_pp_complete_database_upload_service`) This process uploads the complete dataset to a database table. It replaces all existing data in this table, and is therefore a slow process. (Not implemented yet.)
+- Database Update Service: (`land_registry_pp_monthly_update_database_update_service`) This process reads the incrememental monthly update file and updates a database table with the new data. This file is much smaller than the complete dataset, and therefore this update process is relatively fast. (Not implemented yet.)
+- Database Reconcilliation Service: This process inspects both database tables and searches for differences between them. (Not implemented yet.)
+
+- Data Verification: (`land_registry_database_verify.py`) This process is not part of the chain of processes which run automatically. It does not communicate via Kafka. It is a manually run process which verifies that the data in the complete data file (`pp-complete.txt`) matches that of the database. It does not attempt to perform any reconcilliation in the case of any differences, since the updates issued by the Land Registry to the complete file are not always synchronized with the release of a new monthly update file. (This will be removed soon.)
 
 The CRON interval is 1 day, and the trigger fires at midnight each day. Therefore the data files are downloaded everyday.
 
@@ -82,10 +94,12 @@ In many cases, logic from more than one process could have easily been combined 
 
 - Debugging a single process generally becomes easier because it is simpler (not that any of these processes are particularly complex)
 - It is easier to replace a process, or substitute it for something else. The processes and Kafka messaging system form a directed graph. This choice of archetecture leads to a flexibile system, new components can easily be added by reading the control messgaes from Kafka.
-- For example, it would be easy to add another garbage collection process to delete old `pp-complete.txt` files automatically, keeping only the latest one. This might be a fun challenge for anyone who wanted to play with this system.
+- For example, it would be easy to add another garbage collection process to delete old `pp-complete.txt` files automatically, keeping only the latest one. This might be a fun challenge for anyone who wanted to play with this system. (This has now been done.)
 
 
 ## Database Tables
+
+(TODO: this requires updating)
 
 Here is a list of database tables with some explanation as to their purpose:
 
@@ -96,22 +110,27 @@ Here is a list of database tables with some explanation as to their purpose:
 
 ## System Requirements
 
-Ideally, this should be run on Linux. Systemd is used to manage processes, so while the code should run on any operating system (Python is cross platform) the install script will only work on Linux. You will also need:
+Ideally, this should be run on Linux. Docker is used to manage processes, so the code should run on any operating system (Python is cross platform anyway). You will also need:
 
 - a Kafka cluster (or single Kafka broker) for inter-process messaging and communication
 - a Postgres database
-- systemd for process management
-- bash shell
+- An S3 host, such as Minio or AWS S3
+- Docker for process management and deployment
 
 # Setup Instructions
 
+(TODO: this requires updating)
+
 The database and Kafka connection details need to be entered into the environments configuration file. This can be found in the `config` subdirectory.
 
-- `KAFKA_BOOTSTRAP_SERVERS`: Single string containing the Kafka Bootstrap Server addresses in the standard format accepted by Kafka
-- `POSTGRES_ADDRESS`: IP address of Postgres database
+- `KAFKA_BOOTSTRAP_SERVERS`: Single string containing the Kafka Bootstrap Server addresses in the standard format accepted by Kafka. Example: `192.168.0.x:9092`
+- `POSTGRES_HOST`: IP address of Postgres database
 - `POSTGRES_USER`: Postgres username, default `postgres`
 - `POSTGRES_PASSWORD`: Postgres password for user specified by `POSTGRES_USER`
 - `POSTGRES_DATABASE`: Postgres database name, default `postgres`
+- `AWS_ACCESS_KEY_ID`: Access key id for S3 instance
+- `AWS_SECRET_ACCESS_KEY`: Access secret key for S3 instance
+- `MINIO_URL`: Address (with `http`/`https` and port number) of S3 storage. Example: `http://192.168.0.x:9000`
 
 Installed software requirements include Python, Pip and the `venv` Python module.
 
@@ -129,8 +148,8 @@ The processes can then either be run individually, or you can run the installer 
 # Installation
 
 ```
-$ cd install
-$ sudo ./install.sh
+$ cd Land-Registry-Download
+$ docker compose up -d
 ```
 
 TODO: add full SQL code requried for creation of the database tables
@@ -140,10 +159,11 @@ TODO: add full SQL code requried for creation of the database tables
 The subdirectories of this repository are described here:
 
 - `/`: Root directory containing Python executables, and pip `requirements.txt`
-- `/initialize_database`: Contains process to perform the initial database initialization using a copy of `pp-complete.txt`
-- `/data`: Contains the column header names for tables. TODO: check if still used
-- `/install`: Contains installer bash script
+- `/initialize_database`: Contains process to perform the initial database initialization using a copy of `pp-complete.txt` TODO: update this
+- `/docker`: Contains Dockerfiles for each service
 - `/lib_land_registry_data`: Python package (library) for common code required by each process
 - `/sql`: SQL scripts for database table creation
-- `/systemd-scripts`: Helper scripts for systemd
-- `/systemd-unit-service-files`: Service files for systemd units, one for each process managed by systemd
+
+TODO: explain historical data files
+
+Link to repo for data delay. Modify that analysis to exclude properties with transaction dates pre 2015

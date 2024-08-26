@@ -15,4 +15,3 @@ NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_ARCHIVE_COMPLETE = 'pp_monthly_update_archiv
 
 NOTIFICATION_TYPE_PP_COMPLETE_DB_UPLOAD_COMPLETE = 'pp_complete_db_upload_complete_notification'
 NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DB_UPDATE_COMPLETE = 'pp_complete_db_update_complete_notification'
-
