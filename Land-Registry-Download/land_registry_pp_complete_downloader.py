@@ -504,7 +504,6 @@ def update_database_s3(
         download_start_timestamp = row.download_start_timestamp
         data_publish_datestamp = convert_to_data_publish_datestamp(download_start_timestamp)
         data_threshold_datestamp = convert_to_data_threshold_datestamp(download_start_timestamp)
-        data_auto_datestamp = data_auto_datestamp
 
         row.data_publish_datestamp = data_publish_datestamp
         row.data_threshold_datestamp = data_threshold_datestamp
