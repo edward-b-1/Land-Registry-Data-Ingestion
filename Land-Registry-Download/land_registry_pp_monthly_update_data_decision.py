@@ -123,26 +123,26 @@ def kafka_event_loop(
 
                 if notification_type == NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE:
 
-                    pp_monthly_update_file_log_id = dto.pp_monthly_update_file_log_id
+                    pp_monthly_update_download_file_log_id = dto.pp_monthly_update_download_file_log_id
 
                     with Session(postgres_engine) as session:
                         row = (
                             session
                             .query(PPMonthlyUpdateDownloadFileLog)
-                            .filter_by(pp_monthly_update_file_log_id=pp_monthly_update_file_log_id)
+                            .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
                             .one()
                         )
 
                         rows_archive_table = (
                             session
                             .query(PPMonthlyUpdateArchiveFileLog)
-                            .order_by(PPMonthlyUpdateArchiveFileLog.data_timestamp)
+                            .order_by(PPMonthlyUpdateArchiveFileLog.data_download_timestamp)
                             .all()
                         )
                         logger.debug(f'number of database rows from table PPMonthlyUpdateArchiveLog: {len(rows_archive_table)}')
 
                         if len(rows_archive_table) < 1:
-                            logger.debug(f'no previous rows in table PPMonthlyUpdateArchiveLog, current file will be archived')
+                            logger.info(f'no previous rows in table PPMonthlyUpdateArchiveLog, current file will be archived')
                             row.data_decision = 'archive'
                             row.data_decision_datetime = datetime.now(timezone.utc)
                             session.commit()
@@ -150,21 +150,21 @@ def kafka_event_loop(
                             last_row_archive_table = rows_archive_table[-1]
 
                             if last_row_archive_table.sha256sum != row.sha256sum:
-                                logger.debug(f'previous row in table PPMonthlyUpdateArchiveLog has different hash, current file will be archived')
-                                logger.debug(f'hash: {row.sha256sum}, previous hash: {last_row_archive_table.sha256sum}')
+                                logger.info(f'previous row in table PPMonthlyUpdateArchiveLog has different hash, current file will be archived')
+                                logger.info(f'hash: {row.sha256sum}, previous hash: {last_row_archive_table.sha256sum}')
                                 row.data_decision = 'archive'
                                 row.data_decision_datetime = datetime.now(timezone.utc)
                                 session.commit()
                             else:
-                                logger.debug(f'previous row in table PPMonthlyUpdateArchiveLog has same hash, current file will be deleted')
-                                logger.debug(f'hash: {row.sha256sum}')
+                                logger.info(f'previous row in table PPMonthlyUpdateArchiveLog has same hash, current file will be deleted')
+                                logger.info(f'hash: {row.sha256sum}')
                                 row.data_decision = 'garbage_collect'
                                 row.data_decision_datetime = datetime.now(timezone.utc)
                                 session.commit()
 
                     notify(
                         producer=producer,
-                        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+                        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
                     )
 
                 else:
@@ -179,14 +179,15 @@ def kafka_event_loop(
 
 def notify(
     producer: Producer,
-    pp_monthly_update_file_log_id: int,
+    pp_monthly_update_download_file_log_id: int,
 ) -> None:
+    logger.debug(f'sending notification')
 
     dto = PPMonthlyUpdateDataDecisionNotificationDTO(
         notification_source=PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION,
         notification_type=NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
-        pp_monthly_update_file_log_id=pp_monthly_update_file_log_id,
+        pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
     )
 
     dto_json_str = jsons.dumps(dto, strip_privates=True)
@@ -197,6 +198,7 @@ def notify(
         value=dto_json_str,
     )
     producer.flush()
+    logger.debug(f'notification sent')
 
 
 exit_flag = False
