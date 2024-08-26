@@ -5,7 +5,7 @@ WORKDIR /land-registry-data
 
 RUN python3 -m venv venv
 
-RUN ./venv/bin/pip3 install confluent-kafka jsons sqlalchemy psycopg2-binary boto3 botocore typeguard --upgrade --no-cache-dir
+RUN ./venv/bin/pip3 install confluent-kafka jsons sqlalchemy psycopg2-binary boto3 botocore typeguard pandas --upgrade --no-cache-dir
 
 COPY ./lib_land_registry_data ./lib_land_registry_data
 COPY ./land_registry_pp_complete_db_upload.py ./land_registry_pp_complete_db_upload.py
