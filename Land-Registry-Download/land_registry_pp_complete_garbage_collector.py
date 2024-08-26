@@ -135,7 +135,7 @@ def kafka_event_loop(
                 PPCompleteDataDecisionNotificationDTO,
             )
 
-            pp_complete_file_log_id = dto.pp_complete_file_log_id
+            pp_complete_download_file_log_id = dto.pp_complete_download_file_log_id
 
             try:
                 notification_type = dto.notification_type
@@ -151,7 +151,7 @@ def kafka_event_loop(
                         postgres_engine=postgres_engine,
                         boto3_session=boto3_session,
                         minio_url=minio_url,
-                        pp_complete_file_log_id=pp_complete_file_log_id,
+                        pp_complete_download_file_log_id=pp_complete_download_file_log_id,
                     )
 
                 else:
@@ -170,7 +170,7 @@ def garbage_collect(
     postgres_engine: Engine,
     boto3_session,
     minio_url: str,
-    pp_complete_file_log_id: int,
+    pp_complete_download_file_log_id: int,
 ) -> None:
 
     with Session(postgres_engine) as session:
@@ -178,10 +178,10 @@ def garbage_collect(
         row = (
             session
             .query(PPCompleteDownloadFileLog)
-            .filter_by(pp_complete_file_log_id=pp_complete_file_log_id)
+            .filter_by(pp_complete_download_file_log_id=pp_complete_download_file_log_id)
             .one()
         )
-        logger.info(f'querying database table PPCompleteDownloadFileLog for row with pp_complete_file_log_id=\'{pp_complete_file_log_id}\'')
+        logger.info(f'querying database table PPCompleteDownloadFileLog for row with {pp_complete_download_file_log_id=}')
 
         data_decision = row.data_decision
 
@@ -211,27 +211,28 @@ def garbage_collect(
             row.gc_datetime = datetime.now(timezone.utc)
             session.commit()
 
+            pp_complete_download_file_log_id = row.pp_complete_download_file_log_id
+
+            notify(
+                producer=producer,
+                pp_complete_download_file_log_id=pp_complete_download_file_log_id,
+            )
+
         else:
             raise RuntimeError(f'invalid data_decision {data_decision}')
-
-        pp_complete_file_log_id = row.pp_complete_file_log_id
-
-        notify(
-            producer=producer,
-            pp_complete_file_log_id=pp_complete_file_log_id,
-        )
 
 
 def notify(
     producer: Producer,
-    pp_complete_file_log_id: int,
+    pp_complete_download_file_log_id: int,
 ) -> None:
+    logger.debug(f'sending notification')
 
     dto = PPCompleteGCNotificationDTO(
         notification_source=PROCESS_NAME_PP_COMPLETE_GARBAGE_COLLECTOR,
         notification_type=NOTIFICATION_TYPE_PP_COMPLETE_GC_COMPLETE,
         notification_timestamp=datetime.now(timezone.utc),
-        pp_complete_file_log_id=pp_complete_file_log_id,
+        pp_complete_download_file_log_id=pp_complete_download_file_log_id,
     )
 
     dto_json_str = jsons.dumps(dto, strip_privates=True)
@@ -242,6 +243,7 @@ def notify(
         value=dto_json_str,
     )
     producer.flush()
+    logger.debug(f'notification sent')
 
 
 exit_flag = False
