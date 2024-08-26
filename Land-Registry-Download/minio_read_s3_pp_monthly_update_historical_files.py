@@ -31,15 +31,21 @@ import botocore
 import pandas
 
 from datetime import datetime
+from datetime import date
 from datetime import timezone
+from datetime import timedelta
 
 from sqlalchemy import Engine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-
 from lib_land_registry_data.lib_db import PPMonthlyUpdateArchiveFileLog
 from lib_land_registry_data.lib_env import EnvironmentVariables
+
+from lib_land_registry_data.lib_datetime import convert_to_data_publish_datestamp
+from lib_land_registry_data.lib_datetime import convert_to_data_threshold_datestamp
+
+from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
 
 
 month_to_day = {
@@ -109,12 +115,12 @@ def boto3_get_object_and_calculate_sha256(
 ) -> None:
 
     s3_response_object = boto3_client.get_object(Bucket=bucket, Key=object_key_txt)
-    pp_monthly_update_zip_file_data = s3_response_object['Body'].read()
+    pp_monthly_update_data = s3_response_object['Body'].read()
 
     print(f'reading {object_key_txt}')
 
     try:
-        sha256sum_hex_str = hashlib.sha256(pp_monthly_update_zip_file_data).hexdigest()
+        sha256sum_hex_str = hashlib.sha256(pp_monthly_update_data).hexdigest()
         print(f'sha256 of {object_key_txt}: {sha256sum_hex_str}')
         return sha256sum_hex_str
 
@@ -126,6 +132,31 @@ def boto3_get_object_and_calculate_sha256(
         boto3_client.download_file(bucket, object_key_txt, object_key_txt_tmp)
 
 
+def boto3_get_object_and_calculate_data_auto_datestamp(
+    boto3_client,
+    bucket: str,
+    object_key: str,
+) -> date:
+
+    s3_response_object = boto3_client.get_object(Bucket=bucket, Key=object_key)
+    pp_monthly_update_data = s3_response_object['Body'].read()
+
+    df = pandas.read_csv(
+        io.BytesIO(pp_monthly_update_data),
+        header=None,
+    )
+    df.columns = df_pp_monthly_update_columns
+    data_auto_datestamp = df['transaction_date'].max()
+    data_auto_datestamp = (
+        date(
+            year=data_auto_datestamp.year,
+            month=data_auto_datestamp.month,
+            day=data_auto_datestamp.day,
+        )
+    )
+    return data_auto_datestamp
+
+
 def boto3_get_object_unzip_and_calculate_sha256(
     boto3_client,
     bucket: str,
@@ -133,9 +164,9 @@ def boto3_get_object_unzip_and_calculate_sha256(
 ) -> str:
 
     s3_response_object = boto3_client.get_object(Bucket=bucket, Key=object_key_zip)
-    pp_monthly_update_zip_file_data = s3_response_object['Body'].read()
+    pp_monthly_update_data = s3_response_object['Body'].read()
 
-    sha256sum_hex_str = hashlib.sha256(pp_monthly_update_zip_file_data).hexdigest()
+    sha256sum_hex_str = hashlib.sha256(pp_monthly_update_data).hexdigest()
 
     print(f'sha256: {sha256sum_hex_str}')
     return sha256sum_hex_str
@@ -236,6 +267,14 @@ def main():
                 )
             )
 
+            data_auto_datestamp = (
+                boto3_get_object_and_calculate_data_auto_datestamp(
+                    boto3_client=boto3_client,
+                    bucket=bucket,
+                    object_key=object_key_txt,
+                )
+            )
+
             bucket_destination = 'land-registry-data-archive'
             object_key = f'PPMS_update_{year}_{month}_{day}.txt'
 
@@ -249,19 +288,36 @@ def main():
             )
 
             with Session(postgres_engine) as session:
-                data_timestamp = (
-                    datetime(
+                data_threshold_datestamp = (
+                    date(
                         year=int(year),
                         month=int(month),
                         day=int(day),
-                        tzinfo=timezone.utc,
+                    )
+                )
+
+                if month > 11:
+                    month = 1
+                    year = year + 1
+                else:
+                    year = year
+                    month = month + 1
+                day = 20
+
+                data_publish_datestamp = (
+                    date(
+                        year=year,
+                        month=month,
+                        day=day,
                     )
                 )
 
                 row = PPMonthlyUpdateArchiveFileLog(
                     created_datetime=now_timestamp,
                     data_source='historical',
-                    data_timestamp=data_timestamp,
+                    data_publish_datestamp=data_publish_datestamp,
+                    data_threshold_datestamp=data_threshold_datestamp,
+                    data_auto_datestamp=data_auto_datestamp,
                     s3_bucket=bucket_destination,
                     s3_object_key=object_key,
                     sha256sum=sha256sum_hex_str,
