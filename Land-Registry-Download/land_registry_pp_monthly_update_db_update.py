@@ -447,7 +447,7 @@ def get_data_timestamp_from_database(
             .filter_by(pp_monthly_update_archive_file_log_id=pp_monthly_update_archive_file_log_id)
             .one()
         )
-        data_timestamp = row.data_timestamp
+        data_timestamp = row.data_threshold_datestamp
         return data_timestamp
 
 
