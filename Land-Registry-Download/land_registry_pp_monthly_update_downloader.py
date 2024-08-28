@@ -48,8 +48,8 @@ from lib_land_registry_data.lib_kafka import create_producer
 
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE
@@ -73,6 +73,7 @@ from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
 
 
 event_thead_terminate = threading.Event()
+thread_handle = None
 
 
 set_logger_process_name(
@@ -216,6 +217,7 @@ def process_message_queue(
 
     if run_download_flag:
         # Long running process about to start, setup consumer poll loop
+        global thread_handle
         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
         thread_handle.start()
 
@@ -367,6 +369,7 @@ def download_pp_monthly_update_and_upload_to_s3(
                 time_1_hour = 3600
                 time.sleep(time_1_hour)
 
+        logger.info(f'uploading data to s3 bucket')
         (
             s3_object_key,
             s3_upload_start_timestamp,
@@ -390,12 +393,20 @@ def download_pp_monthly_update_and_upload_to_s3(
             s3_object_key=s3_object_key,
         )
 
+        logger.info(f'reading dataframe')
         df = pandas.read_csv(
             io.BytesIO(pp_monthly_update_data),
             header=None,
         )
         df.columns = df_pp_monthly_update_columns
+        logger.info(f'converting transaction_date column')
+        df['transaction_date'] = pandas.to_datetime(
+            arg=df['transaction_date'],
+            utc=True,
+            format='%Y-%m-%d %H:%M',
+        )
         data_auto_datestamp = df['transaction_date'].max()
+        logger.info(f'{data_auto_datestamp=}')
         data_auto_datestamp = (
             date(
                 year=data_auto_datestamp.year,
@@ -404,6 +415,7 @@ def download_pp_monthly_update_and_upload_to_s3(
             )
         )
 
+        logger.info(f'update database')
         update_database_s3(
             engine_postgres=engine_postgres,
             pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
@@ -411,6 +423,7 @@ def download_pp_monthly_update_and_upload_to_s3(
             data_auto_datestamp=data_auto_datestamp,
         )
 
+        logger.info(f'calculating sha256')
         (
             hash_start_timestamp,
             hash_complete_timestamp,
@@ -425,6 +438,7 @@ def download_pp_monthly_update_and_upload_to_s3(
             hash_hex_str=sha256sum_hex_str,
         )
 
+        logger.info(f'update database sha256')
         update_database_sha256sum(
             engine_postgres=engine_postgres,
             pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
@@ -453,18 +467,18 @@ def download_data_to_memory(
         raise RuntimeError(f'request failure {response.status_code}')
 
     # Since we have the data here, why not calculate the shasum of it?
-    data = response.content
+    pp_monthly_update_data = response.content
 
     download_complete_timestamp = datetime.now(timezone.utc)
     logger.info(f'download complete: {download_complete_timestamp}')
     download_duration = download_complete_timestamp - download_start_timestamp
     logger.info(f'download duration: {download_duration}')
 
-    return (data, download_start_timestamp, download_complete_timestamp, download_duration)
+    return (pp_monthly_update_data, download_start_timestamp, download_complete_timestamp, download_duration)
 
 
 def upload_data_to_s3(
-    data: bytes,
+    pp_monthly_update_data: bytes,
     cron_target_date: date,
     boto3_session,
     minio_url: str,
@@ -497,7 +511,7 @@ def upload_data_to_s3(
 
     s3_upload_start_timestamp = datetime.now(timezone.utc)
     logger.info(f'uploading to s3: upload starting {s3_upload_start_timestamp}')
-    boto3_client.put_object(Bucket=bucket, Key=object_key, Body=data)
+    boto3_client.put_object(Bucket=bucket, Key=object_key, Body=pp_monthly_update_data)
     s3_upload_complete_timestamp = datetime.now(timezone.utc)
     logger.info(f'upload complete: {s3_upload_complete_timestamp}')
     s3_upload_duration = s3_upload_complete_timestamp - s3_upload_start_timestamp
@@ -513,19 +527,24 @@ def update_database_s3(
     data_auto_datestamp: date,
 ) -> None:
     with Session(engine_postgres) as session:
+        logger.info(f'query {PPMonthlyUpdateDownloadFileLog.__tablename__}')
         row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
             .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
             .one()
         )
+        logger.info(f'row with id {row.pp_monthly_update_download_file_log_id} returned')
 
         row.download_start_timestamp = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
 
         download_start_timestamp = row.download_start_timestamp
+        logger.info(f'{download_start_timestamp=}')
         data_publish_datestamp = convert_to_data_publish_datestamp(download_start_timestamp)
+        logger.info(f'{data_publish_datestamp=}')
         data_threshold_datestamp = convert_to_data_threshold_datestamp(download_start_timestamp)
+        logger.info(f'{data_threshold_datestamp=}')
 
         row.data_publish_datestamp = data_publish_datestamp
         row.data_threshold_datestamp = data_threshold_datestamp
@@ -536,6 +555,7 @@ def update_database_s3(
         row.s3_upload_to_tmp_bucket_start_timestamp = download_upload_statistics.s3_upload_start_timestamp
         row.s3_upload_to_tmp_bucket_duration = download_upload_statistics.s3_upload_duration
 
+        logger.info(f'commit')
         session.commit()
 
 
@@ -545,17 +565,20 @@ def update_database_sha256sum(
     hash_statistics: HashStatistics,
 ) -> None:
     with Session(engine_postgres) as session:
+        logger.info(f'query {PPMonthlyUpdateDownloadFileLog.__tablename__}')
         row = (
             session
             .query(PPMonthlyUpdateDownloadFileLog)
             .filter_by(pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id)
             .one()
         )
+        logger.info(f'row with id {row.pp_monthly_update_download_file_log_id} returned')
 
         row.sha256sum_start_timestamp = hash_statistics.hash_start_timestamp
         row.sha256sum_duration = hash_statistics.hash_duration
         row.sha256sum = hash_statistics.hash_hex_str
 
+        logger.info(f'commit')
         session.commit()
 
 
@@ -632,8 +655,20 @@ def sigterm_signal_handler(signal, frame):
     exit_flag = True
 
 
+def main_wrapper():
+    global thread_handle
+    try:
+        main()
+    except Exception as error:
+        logger.exception(error)
+        if not event_thead_terminate.is_set():
+            event_thead_terminate.set()
+            thread_handle.join()
+            event_thead_terminate.clear()
+    logger.info(f'process exit')
+
+
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
-    main()
-    logger.info(f'process exit')
+    main_wrapper()

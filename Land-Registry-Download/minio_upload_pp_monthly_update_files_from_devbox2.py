@@ -53,6 +53,7 @@ from lib_land_registry_data.lib_datetime import convert_to_data_publish_datestam
 from lib_land_registry_data.lib_datetime import convert_to_data_threshold_datestamp
 
 from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
+from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns_no_ppd_cat
 
 
 def is_leapyear(year: int) -> bool:
@@ -210,7 +211,17 @@ def main():
                     header=None,
                 )
                 # TODO: some files have 15 columns not 16
-                df.columns = df_pp_monthly_update_columns
+                if len(df.columns) == 15:
+                    df.columns = df_pp_monthly_update_columns_no_ppd_cat
+                elif len(df.columns) == 16:
+                    df.columns = df_pp_monthly_update_columns
+                else:
+                    raise RuntimeError(f'invalid number of columns {len(df.columns)}')
+                df['transaction_date'] = pandas.to_datetime(
+                    arg=df['transaction_date'],
+                    utc=True,
+                    format='%Y-%m-%d %H:%M',
+                )
                 data_auto_datestamp = df['transaction_date'].max()
                 data_auto_datestamp = (
                     date(

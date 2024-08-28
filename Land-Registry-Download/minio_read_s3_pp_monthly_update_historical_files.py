@@ -46,6 +46,7 @@ from lib_land_registry_data.lib_datetime import convert_to_data_publish_datestam
 from lib_land_registry_data.lib_datetime import convert_to_data_threshold_datestamp
 
 from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns
+from lib_land_registry_data.lib_dataframe import df_pp_monthly_update_columns_no_ppd_cat
 
 
 month_to_day = {
@@ -87,6 +88,12 @@ def boto3_get_object_and_load_pandas(
     bucket: str,
     object_key_txt: str
 ) -> None:
+    '''
+    The purpose of this function is just to check the data is readable.
+
+    It should be readable using the Pandas library. If it isn't, save a copy
+    of the data to local disk for inspection.
+    '''
 
     s3_response_object = boto3_client.get_object(Bucket=bucket, Key=object_key_txt)
     pp_monthly_update_zip_file_data = s3_response_object['Body'].read()
@@ -118,18 +125,18 @@ def boto3_get_object_and_calculate_sha256(
     pp_monthly_update_data = s3_response_object['Body'].read()
 
     print(f'reading {object_key_txt}')
+    sha256sum_hex_str = hashlib.sha256(pp_monthly_update_data).hexdigest()
+    print(f'sha256 of {object_key_txt}: {sha256sum_hex_str}')
+    return sha256sum_hex_str
 
-    try:
-        sha256sum_hex_str = hashlib.sha256(pp_monthly_update_data).hexdigest()
-        print(f'sha256 of {object_key_txt}: {sha256sum_hex_str}')
-        return sha256sum_hex_str
+    # try:
 
-    except Exception as error:
-        print(f'can\'t read {object_key_txt}, saving to disk for inspection')
-        print(f'{error}')
-        object_key_txt_tmp = object_key_txt.replace('/', '')
-        object_key_txt_tmp = f'{object_key_txt_tmp}.tmp'
-        boto3_client.download_file(bucket, object_key_txt, object_key_txt_tmp)
+    # except Exception as error:
+    #     print(f'can\'t read {object_key_txt}, saving to disk for inspection')
+    #     print(f'{error}')
+    #     object_key_txt_tmp = object_key_txt.replace('/', '')
+    #     object_key_txt_tmp = f'{object_key_txt_tmp}.tmp'
+    #     boto3_client.download_file(bucket, object_key_txt, object_key_txt_tmp)
 
 
 def boto3_get_object_and_calculate_data_auto_datestamp(
@@ -145,7 +152,17 @@ def boto3_get_object_and_calculate_data_auto_datestamp(
         io.BytesIO(pp_monthly_update_data),
         header=None,
     )
-    df.columns = df_pp_monthly_update_columns
+    if len(df.columns) == 15:
+        df.columns = df_pp_monthly_update_columns_no_ppd_cat
+    elif len(df.columns) == 16:
+        df.columns = df_pp_monthly_update_columns
+    else:
+        raise RuntimeError(f'invalid number of columns {len(df.columns)}')
+    df['transaction_date'] = pandas.to_datetime(
+        arg=df['transaction_date'],
+        utc=True,
+        format='%Y-%m-%d %H:%M',
+    )
     data_auto_datestamp = df['transaction_date'].max()
     data_auto_datestamp = (
         date(
@@ -296,6 +313,7 @@ def main():
                     )
                 )
 
+                # this logic is wrong, there is now a library for this
                 if month > 11:
                     month = 1
                     year = year + 1
