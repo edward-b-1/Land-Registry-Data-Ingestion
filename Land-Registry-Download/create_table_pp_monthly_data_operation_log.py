@@ -18,9 +18,9 @@ def main(recreate: bool):
         print(table)
 
     if recreate:
-        LandRegistryBase.metadata.tables['land_registry_2.pp_complete_download_file_log'].drop(engine)
+        LandRegistryBase.metadata.tables['land_registry_2.pp_monthly_data_operation_log'].drop(engine)
 
-    LandRegistryBase.metadata.tables['land_registry_2.pp_complete_download_file_log'].create(engine)
+    LandRegistryBase.metadata.tables['land_registry_2.pp_monthly_data_operation_log'].create(engine)
 
 
 if __name__ == '__main__':
