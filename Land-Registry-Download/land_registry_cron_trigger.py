@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_CRON_TRIGGER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 
