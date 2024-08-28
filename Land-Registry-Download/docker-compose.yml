@@ -82,3 +82,12 @@ services:
             context: .
             dockerfile: ./docker/land_registry_pp_complete_archive_service/Dockerfile
         restart: no
+
+    land_registry_pp_complete_db_upload_service:
+        container_name: land_registry_pp_complete_db_upload_service
+        image: example/land_registry_pp_complete_db_upload_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_db_upload_service/Dockerfile
+        restart: no

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from lib_land_registry_data.lib_kafka import create_producer
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_ARCHIVE_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_ARCHIVE_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_ARCHIVE_COMPLETE
 

@@ -20,8 +20,8 @@ from lib_land_registry_data.lib_kafka import create_producer
 
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_ARCHIVER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_ARCHIVE_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_ARCHIVE_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_ARCHIVE_COMPLETE
@@ -152,6 +152,7 @@ def kafka_event_loop(
                         minio_url=minio_url,
                         pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
                     )
+                    consumer.commit()
 
                 else:
                     raise RuntimeError(f'unknown notification type: {notification_type}')

@@ -18,6 +18,24 @@ df_pp_monthly_update_columns = [
     'record_op',
 ]
 
+df_pp_monthly_update_columns_no_ppd_cat = [
+    'transaction_unique_id',
+    'price',
+    'transaction_date',
+    'postcode',
+    'property_type',
+    'new_tag',
+    'lease',
+    'primary_address_object_name',
+    'secondary_address_object_name',
+    'street',
+    'locality',
+    'town_city',
+    'district',
+    'county',
+    'record_op',
+]
+
 df_pp_complete_columns = [
     'transaction_unique_id',
     'price',

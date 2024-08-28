@@ -149,6 +149,36 @@ class PPCompleteArchiveFileLog(LandRegistryBase):
     database_upload_duration: Mapped[Optional[timedelta]]
 
 
+class PPMonthlyDataOperationLog(LandRegistryBase):
+    '''
+    This table is used to control the data flow for initialization of the
+    PPMonthlyData table.
+
+    The first row created will record that a copy of pp-complete.txt has been
+    used to initialize the data.
+
+    Following this, all future operations will be monthly update operations.
+    A copy of pp-monthly-update.txt will be used to update the data.
+
+    The data_publish_timestamp is used to check if the data for
+    pp-monthly-update.txt is already present because it has been uploaded as
+    part of the initialization step using pp-complete.txt.
+    '''
+
+    __tablename__ = 'pp_monthly_data_operation_log'
+
+    pp_monthly_data_operation_log_id: Mapped[int] = mapped_column(primary_key=True)
+
+    created_datetime: Mapped[datetime]
+
+    operation_category: Mapped[str] # initialize | monthly-update
+    data_source: Mapped[str] # pp-complete | pp-monthly-update
+    data_publish_datestamp: Mapped[date]
+    s3_bucket: Mapped[str]
+    s3_object_key: Mapped[str]
+    sha256sum: Mapped[str]
+
+
 class PPDataConsistencyCheckLog(LandRegistryBase):
 
     __tablename__ = 'pp_data_consistency_check_log'

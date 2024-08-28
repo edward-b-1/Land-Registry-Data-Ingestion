@@ -26,8 +26,8 @@ import botocore
 
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_COMPLETE_DOWNLOADER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_COMPLETE_DOWNLOAD_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_CRON_TRIGGER_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_COMPLETE_DOWNLOAD_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_CRON_TRIGGER
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_COMPLETE_DOWNLOAD_COMPLETE
@@ -54,6 +54,7 @@ from lib_land_registry_data.lib_dataframe import df_pp_complete_columns
 
 
 event_thead_terminate = threading.Event()
+thread_handle = None
 
 
 set_logger_process_name(
@@ -194,6 +195,7 @@ def process_message_queue(
 
     if run_download_flag:
         # Long running process about to start, setup consumer poll loop
+        global thread_handle
         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
         thread_handle.start()
 
@@ -373,6 +375,11 @@ def download_pp_complete_and_upload_to_s3(
             header=None,
         )
         df.columns = df_pp_complete_columns
+        df['transaction_date'] = pandas.to_datetime(
+            arg=df['transaction_date'],
+            utc=True,
+            format='%Y-%m-%d %H:%M',
+        )
         data_auto_datestamp = df['transaction_date'].max()
         data_auto_datestamp = (
             date(
@@ -610,8 +617,20 @@ def sigterm_signal_handler(signal, frame):
     exit_flag = True
 
 
+def main_wrapper():
+    global thread_handle
+    try:
+        main()
+    except Exception as error:
+        logger.exception(error)
+        if not event_thead_terminate.is_set():
+            event_thead_terminate.set()
+            thread_handle.join()
+            event_thead_terminate.clear()
+    logger.info(f'process exit')
+
+
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
-    main()
-    logger.info(f'process exit')
+    main_wrapper()
