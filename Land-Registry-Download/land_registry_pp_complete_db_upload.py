@@ -23,8 +23,8 @@ from lib_land_registry_data.lib_kafka import create_producer
 
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_COMPLETE_DATABASE_UPLOADER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_COMPLETE_ARCHIVE_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_COMPLETE_DB_UPLOAD_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_COMPLETE_ARCHIVE_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_COMPLETE_DB_UPLOAD_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_COMPLETE_ARCHIVE_COMPLETE
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_COMPLETE_DB_UPLOAD_COMPLETE
@@ -173,31 +173,31 @@ def kafka_event_loop(
                     raise RuntimeError(f'unknown notification type: {notification_type}')
 
             except Exception as exception:
-                log_message = f'notification error: {exception}'
-                logger.error(log_message)
+                logger.exception(exception)
 
     consumer.unsubscribe()
     consumer.close()
 
 
 df_columns = [
-    'transaction_unique_id'
-    'price'
-    'transaction_date'
-    'postcode'
-    'property_type'
-    'new_tag'
-    'lease'
-    'primary_address_object_name'
-    'secondary_address_object_name'
-    'street'
-    'locality'
-    'town_city'
-    'district'
-    'county'
-    'ppd_cat'
-    'data_timestamp'
-    'created_datetime'
+    'transaction_unique_id',
+    'price',
+    'transaction_date',
+    'postcode',
+    'property_type',
+    'new_tag',
+    'lease',
+    'primary_address_object_name',
+    'secondary_address_object_name',
+    'street',
+    'locality',
+    'town_city',
+    'district',
+    'county',
+    'ppd_cat',
+    'record_op',
+    'data_timestamp',
+    'created_datetime',
 ]
 
 
@@ -238,10 +238,6 @@ def database_upload(
         io.BytesIO(pp_monthly_update_data),
         header=None,
     )
-
-    logger.info(f'dataframe columns:')
-    for column in df.columns:
-        logger.info(f'{column}')
 
     data_timestamp = get_data_timestamp_from_database(
         postgres_engine=postgres_engine,
