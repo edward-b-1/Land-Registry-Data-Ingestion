@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_DATA_DECISION
 from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_PP_MONTHLY_UPDATE_DOWNLOADER
 
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
-from lib_land_registry_data.lib_topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DOWNLOAD_NOTIFICATION
+from lib_land_registry_data.lib_constants.topic_name import TOPIC_NAME_PP_MONTHLY_UPDATE_DATA_DECISION_NOTIFICATION
 
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DOWNLOAD_COMPLETE
 from lib_land_registry_data.lib_constants.notification_type import NOTIFICATION_TYPE_PP_MONTHLY_UPDATE_DATA_DECISION_COMPLETE
@@ -166,6 +166,7 @@ def kafka_event_loop(
                         producer=producer,
                         pp_monthly_update_download_file_log_id=pp_monthly_update_download_file_log_id,
                     )
+                    consumer.commit()
 
                 else:
                     raise RuntimeError(f'unknown notification type: {notification_type}')
