@@ -22,6 +22,10 @@ Land Registry Data Ingestion System
 
 This is a data ingestion system which downloads data from the Land Registry and ingests this data into a database. The Land Registry dataset contains price paid data for properties sold in the UK.
 
+A system diagram is shown below. Most, but not all, of these components have been implemented. The `pp-monthly` database update chain is currently not implemented. This cannot be completed until the UK Land Registry is able to send a complete set of monthly update history, which they are not yet able to do.
+
+![Land Registry System Diagram](image/land-registry-data-system-diagram.png)
+
 
 # Why?
 
@@ -155,6 +159,8 @@ $ docker compose up -d
 TODO: add full SQL code requried for creation of the database tables
 
 # Project Structure
+
+TODO: update this
 
 The subdirectories of this repository are described here:
 

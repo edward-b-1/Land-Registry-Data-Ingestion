@@ -188,6 +188,10 @@ def garbage_collect(
 
         if data_decision == 'archive':
             logger.info(f'row with data_decision={data_decision}, ignore')
+
+            assert row.gc_action_taken is None
+            assert row.gc_datetime is None
+
             row.gc_action_taken = 'ignore'
             row.gc_datetime = datetime.now(timezone.utc)
             session.commit()
@@ -207,6 +211,9 @@ def garbage_collect(
                 )
             )
             boto3_client.delete_object(Bucket=bucket, Key=object_key)
+
+            assert row.gc_action_taken is None
+            assert row.gc_datetime is None
 
             row.gc_action_taken = 'garbage_collect'
             row.gc_datetime = datetime.now(timezone.utc)

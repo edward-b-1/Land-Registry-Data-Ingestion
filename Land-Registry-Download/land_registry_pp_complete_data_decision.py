@@ -142,6 +142,10 @@ def kafka_event_loop(
 
                         if len(rows_archive_table) < 1:
                             logger.info(f'no previous rows in table PPCompleteArchiveFileLog, current file will be archived')
+
+                            assert row.data_decision is None
+                            assert row.data_decision_datetime is None
+
                             row.data_decision = 'archive'
                             row.data_decision_datetime = datetime.now(timezone.utc)
                             session.commit()
@@ -151,12 +155,20 @@ def kafka_event_loop(
                             if last_row_archive_table.sha256sum != row.sha256sum:
                                 logger.info(f'previous row in table PPCompleteArchiveFileLog has different hash, current file will be archived')
                                 logger.info(f'hash: {row.sha256sum}, previous hash: {last_row_archive_table.sha256sum}')
+
+                                assert row.data_decision is None
+                                assert row.data_decision_datetime is None
+
                                 row.data_decision = 'archive'
                                 row.data_decision_datetime = datetime.now(timezone.utc)
                                 session.commit()
                             else:
                                 logger.info(f'previous row in table PPCompleteArchiveFileLog has same hash, current file will be deleted')
                                 logger.info(f'hash: {row.sha256sum}')
+
+                                assert row.data_decision is None
+                                assert row.data_decision_datetime is None
+
                                 row.data_decision = 'garbage_collect'
                                 row.data_decision_datetime = datetime.now(timezone.utc)
                                 session.commit()

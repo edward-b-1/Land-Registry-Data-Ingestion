@@ -218,6 +218,13 @@ def archive(
             s3_copy_complete_timestamp = datetime.now(timezone.utc)
             s3_copy_duration = s3_copy_complete_timestamp - s3_copy_start_timestamp
 
+            assert row.s3_archive_action_taken is None
+            assert row.s3_archive_datetime is None
+            assert row.s3_archive_bucket is None
+            assert row.s3_archive_object_key is None
+            assert row.s3_copy_start_timestamp is None
+            assert row.s3_copy_duration is None
+
             row.s3_archive_action_taken = 'archive'
             row.s3_archive_datetime = datetime.now(timezone.utc)
             row.s3_archive_bucket = bucket_archive
@@ -255,6 +262,10 @@ def archive(
 
         elif data_decision == 'garbage_collect':
             logger.info(f'row with data_decision={data_decision}, ignore')
+
+            assert row.s3_archive_action_taken is None
+            assert row.s3_archive_datetime is None
+
             row.s3_archive_action_taken = 'ignore'
             row.s3_archive_datetime = datetime.now(timezone.utc)
             session.commit()

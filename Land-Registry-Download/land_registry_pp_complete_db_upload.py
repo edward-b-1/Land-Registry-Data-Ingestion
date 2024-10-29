@@ -271,6 +271,9 @@ def database_upload(
             .one()
         )
 
+        assert row.database_upload_start_timestamp is None
+        assert row.database_upload_duration is None
+
         row.database_upload_start_timestamp = database_upload_start_timestamp
         row.database_upload_duration = database_upload_duration
         session.commit()

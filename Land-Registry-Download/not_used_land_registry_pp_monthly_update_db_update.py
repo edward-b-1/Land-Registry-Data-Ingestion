@@ -337,6 +337,10 @@ def database_upload(
             .one()
         )
 
+        # added by mistake - remove?
+        assert row.database_update_start_timestamp is None
+        assert row.database_update_duration is None
+
         row.database_update_start_timestamp = database_upload_start_timestamp
         row.database_update_duration = database_upload_duration
         session.commit()
