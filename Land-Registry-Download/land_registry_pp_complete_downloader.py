@@ -505,6 +505,16 @@ def update_database_s3(
             .one()
         )
 
+        assert row.download_start_timestamp is None
+        assert row.download_duration is None
+        assert row.data_publish_datestamp is None
+        assert row.data_threshold_datestamp is None
+        assert row.data_auto_datestamp is None
+        assert row.s3_tmp_bucket is None
+        assert row.s3_tmp_object_key is None
+        assert row.s3_upload_to_tmp_bucket_start_timestamp is None
+        assert row.s3_upload_to_tmp_bucket_duration is None
+
         row.download_start_timestamp = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
 
@@ -536,6 +546,10 @@ def update_database_sha256sum(
             .filter_by(pp_complete_download_file_log_id=pp_complete_download_file_log_id)
             .one()
         )
+
+        assert row.sha256sum_start_timestamp is None
+        assert row.sha256sum_duration is None
+        assert row.sha256sum is None
 
         row.sha256sum_start_timestamp = hash_statistics.hash_start_timestamp
         row.sha256sum_duration = hash_statistics.hash_duration
