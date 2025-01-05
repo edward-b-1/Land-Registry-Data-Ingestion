@@ -390,6 +390,7 @@ def download_pp_complete_and_upload_to_s3(
         except Exception as error:
             logger.error(f'{error}')
             logger.exception(error)
+            raise
 
         download_upload_statistics = DownloadUploadStatistics(
             download_start_timestamp=download_start_timestamp,
