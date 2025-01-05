@@ -40,8 +40,6 @@ services:
             resources:
                 limits:
                     memory: 40G
-        ports:
-            - 20000:19999
 
     land_registry_pp_monthly_update_data_decision_service:
         container_name: land_registry_pp_monthly_update_data_decision_service
