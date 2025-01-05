@@ -10,4 +10,5 @@ RUN ./venv/bin/pip3 install confluent-kafka jsons sqlalchemy psycopg2-binary cro
 COPY ./lib_land_registry_data ./lib_land_registry_data
 COPY ./land_registry_cron_trigger.py ./land_registry_cron_trigger.py
 
-ENTRYPOINT ["./venv/bin/python3", "land_registry_cron_trigger.py"]
+#ENTRYPOINT ["./venv/bin/python3", "land_registry_cron_trigger.py"]
+CMD ["./venv/bin/python3", "land_registry_cron_trigger.py"]
