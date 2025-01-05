@@ -1,4 +1,6 @@
 
+import tracemalloc
+
 import io
 import time
 import signal
@@ -190,6 +192,10 @@ def process_message_queue(
     engine_postgres: Engine,
 ):
     # TODO: can raise exception (but doesn't due to logic elsewhere)
+
+    logger.info(f'process_message_queue called, tracemalloc info:')
+    logger.info(f'{tracemalloc.get_traced_memory()}')
+
     (
         run_download_flag,
         pp_complete_download_file_log_id,
@@ -232,6 +238,9 @@ def process_message_queue(
 
         logger.info(f'clear thread events')
         event_thead_terminate.clear()
+
+    logger.info(f'process_message_queue end, tracemalloc info:')
+    logger.info(f'{tracemalloc.get_traced_memory()}')
 
 
 def process_message_queue_filter_for_download_trigger_message(
@@ -695,4 +704,6 @@ def main_wrapper():
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
+    tracemalloc.start()
     main_wrapper()
+    tracemalloc.stop()
