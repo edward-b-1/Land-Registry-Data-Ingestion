@@ -381,6 +381,7 @@ def download_pp_complete_and_upload_to_s3(
                 logger.warning(f'download failed, retry in 1h, number of failures: {fail_count}')
                 time_1_hour = 3600
                 time.sleep(time_1_hour)
+                continue
 
         try:
             logger.info(f'upload to s3')
