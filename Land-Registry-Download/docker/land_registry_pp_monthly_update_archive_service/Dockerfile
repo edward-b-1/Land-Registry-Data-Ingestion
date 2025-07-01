@@ -10,4 +10,5 @@ RUN ./venv/bin/pip3 install confluent-kafka jsons sqlalchemy psycopg2-binary bot
 COPY ./lib_land_registry_data ./lib_land_registry_data
 COPY ./land_registry_pp_monthly_update_archiver.py ./land_registry_pp_monthly_update_archiver.py
 
-ENTRYPOINT ["./venv/bin/python3", "land_registry_pp_monthly_update_archiver.py"]
+#ENTRYPOINT ["./venv/bin/python3", "land_registry_pp_monthly_update_archiver.py"]
+CMD ["./venv/bin/python3", "land_registry_pp_monthly_update_archiver.py"]

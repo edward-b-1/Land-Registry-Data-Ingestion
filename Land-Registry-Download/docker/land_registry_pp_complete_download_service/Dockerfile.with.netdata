@@ -3,6 +3,9 @@ FROM python:3.12-bookworm
 
 WORKDIR /land-registry-data
 
+RUN apt update && apt install netdata -y
+COPY ./netdata.conf /etc/netdata/netdata.conf
+
 RUN python3 -m venv venv
 
 RUN ./venv/bin/pip3 install confluent-kafka jsons sqlalchemy psycopg2-binary boto3 botocore typeguard requests pandas --upgrade --no-cache-dir

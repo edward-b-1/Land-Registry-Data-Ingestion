@@ -1,4 +1,6 @@
 
+import tracemalloc
+
 import io
 import time
 import signal
@@ -105,6 +107,7 @@ def main():
     postgres_connection_string = environment_variables.get_postgres_connection_string()
     engine_postgres = create_engine(postgres_connection_string)
 
+    logger.info(f'start kafka event loop')
     kafka_event_loop(
         consumer=consumer,
         producer=producer,
@@ -140,6 +143,7 @@ def kafka_event_loop(
 
         if message is None:
             if len(message_queue) > 0:
+                logger.info(f'process message queue')
                 process_message_queue(
                     message_queue=message_queue,
                     consumer=consumer,
@@ -152,7 +156,8 @@ def kafka_event_loop(
             continue
 
         if message.error():
-            logger.error(f'kafka message error: {message.value().decode()}')
+            log_message = f'kafka message error: {message.value().decode()}'
+            logger.error(log_message)
             raise RuntimeError(f'{message.value().decode()}')
         else:
             logger.debug(f'message received')
@@ -188,22 +193,33 @@ def process_message_queue(
     engine_postgres: Engine,
 ):
     # TODO: can raise exception (but doesn't due to logic elsewhere)
+
+    logger.info(f'process_message_queue called, tracemalloc info:')
+    logger.info(f'{tracemalloc.get_traced_memory()}')
+
     (
         run_download_flag,
         pp_complete_download_file_log_id,
     ) = process_message_queue_filter_for_download_trigger_message(message_queue)
 
+    logger.info(f'run_download_flag={run_download_flag}')
     if run_download_flag:
+        logger.info(f'starting thread handle')
+
         # Long running process about to start, setup consumer poll loop
         global thread_handle
         thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
         thread_handle.start()
+        logger.info(f'thread handle started')
 
+        logger.info(f'query database for cron target date')
         cron_target_date = get_cron_target_date_from_database(
             pp_complete_download_file_log_id=pp_complete_download_file_log_id,
             engine_postgres=engine_postgres,
         )
+        logger.info(f'cron_target_date={cron_target_date}')
 
+        logger.info(f'running download, update database and notify process')
         run_download_and_update_database_and_notify(
             pp_complete_download_file_log_id=pp_complete_download_file_log_id,
             cron_target_date=cron_target_date,
@@ -213,10 +229,19 @@ def process_message_queue(
             engine_postgres=engine_postgres,
         )
 
+        logger.info(f'joining thread')
         event_thead_terminate.set()
         thread_handle.join()
+        logger.info(f'thread joined')
+
+        logger.info(f'commit consumer')
         consumer.commit()
+
+        logger.info(f'clear thread events')
         event_thead_terminate.clear()
+
+    logger.info(f'process_message_queue end, tracemalloc info:')
+    logger.info(f'{tracemalloc.get_traced_memory()}')
 
 
 def process_message_queue_filter_for_download_trigger_message(
@@ -241,14 +266,18 @@ def process_message_queue_filter_for_download_trigger_message(
     )
 
     if len(message_queue) > 0:
+        logger.info(f'{len(message_queue)} messages in message queue passed filter')
         message = message_queue[-1]
 
         notification_type = message.notification_type
         if notification_type == NOTIFICATION_TYPE_CRON_TRIGGER:
+            logger.info(f'message.pp_complete_download_file_log_id={message.pp_complete_download_file_log_id}')
             return (True, message.pp_complete_download_file_log_id)
         else:
+            logger.error(f'unknown notification type: {notification_type}')
             raise RuntimeError(f'unknown notification type: {notification_type}')
     else:
+        logger.info(f'no messages in message queue passed filter')
         return (False, None)
 
 
@@ -275,7 +304,7 @@ def run_download_and_update_database_and_notify(
     minio_url: str,
     engine_postgres: Engine,
 ):
-    logger.info('run_download_process: run_download_and_notify')
+    logger.info(f'run_download_and_notify')
     (
         success,
         download_upload_statistics,
@@ -287,8 +316,10 @@ def run_download_and_update_database_and_notify(
         boto3_session=boto3_session,
         minio_url=minio_url,
     )
+    logger.info(f'run_download_and_notify complete')
 
     if success:
+        logger.info(f'notify')
         notify(
             producer=producer,
             pp_complete_download_file_log_id=pp_complete_download_file_log_id,
@@ -327,18 +358,23 @@ def download_pp_complete_and_upload_to_s3(
 
     fail_count = 0
     while True:
+        logger.info(f'try to run download')
+
         try:
+            logger.info(f'download data to memory')
             (
                 pp_complete_data,
                 download_start_timestamp,
                 download_complete_timestamp,
                 download_duration,
             ) = download_data_to_memory(url)
-
+            logger.info(f'download data to memory complete')
         except Exception as error:
             logger.error(f'{error}')
+            logger.exception(error)
 
             fail_count += 1
+            logger.warning(f'fail_count={fail_count}')
             if fail_count > 20:
                 logger.error(f'download failed after {fail_count} retries, give up')
                 return (False, None, None)
@@ -346,18 +382,26 @@ def download_pp_complete_and_upload_to_s3(
                 logger.warning(f'download failed, retry in 1h, number of failures: {fail_count}')
                 time_1_hour = 3600
                 time.sleep(time_1_hour)
+                continue
 
-        (
-            s3_object_key,
-            s3_upload_start_timestamp,
-            s3_upload_complete_timestamp,
-            s3_upload_duration,
-        ) = upload_data_to_s3(
-            pp_complete_data=pp_complete_data,
-            cron_target_date=cron_target_date,
-            boto3_session=boto3_session,
-            minio_url=minio_url,
-        )
+        try:
+            logger.info(f'upload to s3')
+            (
+                s3_object_key,
+                s3_upload_start_timestamp,
+                s3_upload_complete_timestamp,
+                s3_upload_duration,
+            ) = upload_data_to_s3(
+                pp_complete_data=pp_complete_data,
+                cron_target_date=cron_target_date,
+                boto3_session=boto3_session,
+                minio_url=minio_url,
+            )
+            logger.info(f'upload to s3 complete')
+        except Exception as error:
+            logger.error(f'{error}')
+            logger.exception(error)
+            raise
 
         download_upload_statistics = DownloadUploadStatistics(
             download_start_timestamp=download_start_timestamp,
@@ -370,16 +414,21 @@ def download_pp_complete_and_upload_to_s3(
             s3_object_key=s3_object_key,
         )
 
+        logger.info(f'reading data with pandas')
         df = pandas.read_csv(
             io.BytesIO(pp_complete_data),
             header=None,
         )
+        logger.info(f'done reading data')
+        logger.info(f'get column names')
         df.columns = df_pp_complete_columns
+        logger.info(f'convert column transaction_date to datetime')
         df['transaction_date'] = pandas.to_datetime(
             arg=df['transaction_date'],
             utc=True,
             format='%Y-%m-%d %H:%M',
         )
+        logger.info(f'get data_auto_datestamp')
         data_auto_datestamp = df['transaction_date'].max()
         data_auto_datestamp = (
             date(
@@ -388,7 +437,9 @@ def download_pp_complete_and_upload_to_s3(
                 day=data_auto_datestamp.day,
             )
         )
+        logger.info(f'{data_auto_datestamp=}')
 
+        logger.info(f'update database s3')
         update_database_s3(
             engine_postgres=engine_postgres,
             pp_complete_download_file_log_id=pp_complete_download_file_log_id,
@@ -396,12 +447,14 @@ def download_pp_complete_and_upload_to_s3(
             data_auto_datestamp=data_auto_datestamp,
         )
 
+        logger.info(f'calculating sha256sum')
         (
             hash_start_timestamp,
             hash_complete_timestamp,
             hash_duration,
             sha256sum_hex_str,
         ) = calculate_sha256sum(pp_complete_data)
+        logger.info(f'{sha256sum_hex_str=}')
 
         hash_statistics = HashStatistics(
             hash_start_timestamp=hash_start_timestamp,
@@ -410,6 +463,7 @@ def download_pp_complete_and_upload_to_s3(
             hash_hex_str=sha256sum_hex_str,
         )
 
+        logger.info(f'update database sha256sum')
         update_database_sha256sum(
             engine_postgres=engine_postgres,
             pp_complete_download_file_log_id=pp_complete_download_file_log_id,
@@ -505,15 +559,15 @@ def update_database_s3(
             .one()
         )
 
-        assert row.download_start_timestamp is None
-        assert row.download_duration is None
-        assert row.data_publish_datestamp is None
-        assert row.data_threshold_datestamp is None
-        assert row.data_auto_datestamp is None
-        assert row.s3_tmp_bucket is None
-        assert row.s3_tmp_object_key is None
-        assert row.s3_upload_to_tmp_bucket_start_timestamp is None
-        assert row.s3_upload_to_tmp_bucket_duration is None
+        assert row.download_start_timestamp is None, f'assert \'row.download_start_timestamp is None\' failed'
+        assert row.download_duration is None, f'assert \'row.download_duration is None\' failed'
+        assert row.data_publish_datestamp is None, f'assert \'row.data_publish_datestamp is None\' failed'
+        assert row.data_threshold_datestamp is None, f'assert \'row.data_threshold_datestamp is None\' failed'
+        assert row.data_auto_datestamp is None, f'assert \'row.data_auto_datestamp is None\' failed'
+        assert row.s3_tmp_bucket is None, f'assert \'row.s3_tmp_bucket is None\' failed'
+        assert row.s3_tmp_object_key is None, f'assert \'row.s3_tmp_object_key is None\' failed'
+        assert row.s3_upload_to_tmp_bucket_start_timestamp is None, f'assert \'row.s3_upload_to_tmp_bucket_start_timestamp is None\' failed'
+        assert row.s3_upload_to_tmp_bucket_duration is None, f'assert \'row.s3_upload_to_tmp_bucket_duration is None\' failed'
 
         row.download_start_timestamp = download_upload_statistics.download_start_timestamp
         row.download_duration = download_upload_statistics.download_duration
@@ -531,7 +585,9 @@ def update_database_s3(
         row.s3_upload_to_tmp_bucket_start_timestamp = download_upload_statistics.s3_upload_start_timestamp
         row.s3_upload_to_tmp_bucket_duration = download_upload_statistics.s3_upload_duration
 
+        logger.info(f'session commit')
         session.commit()
+        logger.info(f'session commit complete')
 
 
 def update_database_sha256sum(
@@ -547,15 +603,17 @@ def update_database_sha256sum(
             .one()
         )
 
-        assert row.sha256sum_start_timestamp is None
-        assert row.sha256sum_duration is None
-        assert row.sha256sum is None
+        assert row.sha256sum_start_timestamp is None, f'assert \'row.sha256sum_start_timestamp is None\' failed'
+        assert row.sha256sum_duration is None, f'assert \'row.sha256sum_duration is None\' failed'
+        assert row.sha256sum is None, f'assert \'row.sha256sum is None\' failed'
 
         row.sha256sum_start_timestamp = hash_statistics.hash_start_timestamp
         row.sha256sum_duration = hash_statistics.hash_duration
         row.sha256sum = hash_statistics.hash_hex_str
 
+        logger.info(f'session commit')
         session.commit()
+        logger.info(f'session commit complete')
 
 
 def calculate_sha256sum(data: bytes) -> tuple[datetime, datetime, timedelta, str]:
@@ -636,6 +694,7 @@ def main_wrapper():
     try:
         main()
     except Exception as error:
+        logger.error(f'{error}')
         logger.exception(error)
         if not event_thead_terminate.is_set():
             event_thead_terminate.set()
@@ -647,4 +706,6 @@ def main_wrapper():
 if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
+    tracemalloc.start()
     main_wrapper()
+    tracemalloc.stop()
