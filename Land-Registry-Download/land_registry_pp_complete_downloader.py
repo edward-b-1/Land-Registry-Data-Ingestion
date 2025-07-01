@@ -156,7 +156,8 @@ def kafka_event_loop(
             continue
 
         if message.error():
-            logger.error(f'kafka message error: {message.value().decode()}')
+            log_message = f'kafka message error: {message.value().decode()}'
+            logger.error(log_message)
             raise RuntimeError(f'{message.value().decode()}')
         else:
             logger.debug(f'message received')

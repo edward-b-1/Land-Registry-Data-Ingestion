@@ -117,6 +117,7 @@ def kafka_event_loop(
     consumer.subscribe([TOPIC_NAME_PP_COMPLETE_ARCHIVE_NOTIFICATION])
     consumer_poll_timeout = 5.0
     logger.info(f'consumer poll timeout: {consumer_poll_timeout}')
+    message_queue = []
 
     global exit_flag
 
@@ -129,6 +130,17 @@ def kafka_event_loop(
         message = consumer.poll(consumer_poll_timeout)
 
         if message is None:
+            if len(message_queue) > 0:
+                logger.info(f'process message queue')
+                process_message_queue(
+                    message_queue=message_queue,
+                    consumer=consumer,
+                    producer=producer,
+                    boto3_session=boto3_session,
+                    minio_url=minio_url,
+                    postgres_engine=postgres_engine,
+                )
+                message_queue.clear()
             continue
 
         if message.error():
@@ -136,38 +148,19 @@ def kafka_event_loop(
             logger.error(log_message)
             raise RuntimeError(f'{message.value().decode()}')
         else:
-            dto = jsons.loads(
+            logger.debug(f'message received')
+            document = jsons.loads(
                 message.value().decode(),
                 PPCompleteArchiveNotificationDTO,
             )
 
             try:
-                notification_type = dto.notification_type
+                notification_type = document.notification_type
                 logger.debug(f'notification type: {notification_type}')
 
                 if notification_type == NOTIFICATION_TYPE_PP_COMPLETE_ARCHIVE_COMPLETE:
-                    logger.info(f'run database upload process')
-
-                    pp_complete_archive_file_log_id = dto.pp_complete_archive_file_log_id
-
-                    # Long running process about to start, setup consumer poll loop
-                    thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
-                    thread_handle.start()
-
-                    # new notification documents just trigger the garbage collection
-                    # process for all old files
-                    database_upload(
-                        producer=producer,
-                        postgres_engine=postgres_engine,
-                        boto3_session=boto3_session,
-                        minio_url=minio_url,
-                        pp_complete_archive_file_log_id=pp_complete_archive_file_log_id,
-                    )
-
-                    event_thead_terminate.set()
-                    thread_handle.join()
-                    consumer.commit()
-                    event_thead_terminate.clear()
+                    logger.debug(f'appending message of type {notification_type} to message queue')
+                    message_queue.append(document)
 
                 else:
                     raise RuntimeError(f'unknown notification type: {notification_type}')
@@ -177,6 +170,67 @@ def kafka_event_loop(
 
     consumer.unsubscribe()
     consumer.close()
+
+
+def process_message_queue(
+    message_queue: list,
+    consumer: Consumer,
+    producer: Producer,
+    boto3_session,
+    minio_url: str,
+    postgres_engine: Engine,
+):
+    logger.info(f'process_message_queue called')
+
+    (
+        pp_complete_archive_file_log_id
+    ) = process_message_queue_filter_for_nothing(message_queue)
+
+    logger.info(f'run database upload process')
+
+    #pp_complete_archive_file_log_id = dto.pp_complete_archive_file_log_id
+
+    # Long running process about to start, setup consumer poll loop
+    thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
+    thread_handle.start()
+
+    # new notification documents just trigger the garbage collection
+    # process for all old files
+    database_upload(
+        producer=producer,
+        postgres_engine=postgres_engine,
+        boto3_session=boto3_session,
+        minio_url=minio_url,
+        pp_complete_archive_file_log_id=pp_complete_archive_file_log_id,
+    )
+
+    event_thead_terminate.set()
+    thread_handle.join()
+    consumer.commit()
+    event_thead_terminate.clear()
+
+
+def process_message_queue_filter_for_nothing(
+    message_queue: list[PPCompleteArchiveNotificationDTO],
+) -> int|None:
+    # do not filter any messages, this function was copied from `land_registry_pp_complete_downloader.py`
+
+    # message_queue = filter logic would go here
+
+    if len(message_queue) > 0:
+        logger.info(f'{len(message_queue)} messages in message queue')
+        message = message_queue[-1]
+
+        notification_type = message.notification_type
+        if notification_type == NOTIFICATION_TYPE_PP_COMPLETE_ARCHIVE_COMPLETE:
+            logger.info(f'message.pp_complete_archive_file_log_id = {message.pp_complete_archive_file_log_id}')
+            return message.pp_complete_archive_file_log_id
+        else:
+            logger.error(f'unknown notification type {notification_type}')
+            raise RuntimeError(f'unknown notification type: {notification_type}')
+    else:
+        logger.info(f'no messages in message queue')
+        return None
 
 
 df_columns = [
