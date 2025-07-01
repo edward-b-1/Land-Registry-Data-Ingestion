@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 
 import logging
 import sys
 import os
 
-from lib_land_registry_download.lib_db import PricePaidData
+from lib_land_registry_data.lib_db import PricePaidData
 
 from sqlalchemy import create_engine
 from sqlalchemy import text

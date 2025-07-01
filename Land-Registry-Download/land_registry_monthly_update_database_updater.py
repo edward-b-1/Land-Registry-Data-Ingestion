@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 import jsons
 from datetime import datetime
@@ -10,36 +9,35 @@ import signal
 import threading
 import pandas
 
-from lib_land_registry_download.lib_kafka import create_consumer
-from lib_land_registry_download.lib_kafka import create_producer
+from lib_land_registry_data.lib_kafka import create_consumer
+from lib_land_registry_data.lib_kafka import create_producer
+
+from lib_land_registry_data.lib_filesystem import get_file_path_pp_monthly_update
 
 from confluent_kafka import Consumer
 from confluent_kafka import Producer
 
-from lib_land_registry_download.lib_topic_name import topic_name_land_registry_download_monthly_update_data_decision_notification
-from lib_land_registry_download.lib_topic_name import topic_name_land_registry_download_monthly_update_database_updater_notification
+from lib_land_registry_data.lib_constants.topic_name import topic_name_land_registry_data_monthly_update_data_decision_notification
+from lib_land_registry_data.lib_constants.topic_name import topic_name_land_registry_data_monthly_update_database_updater_notification
 
-from lib_land_registry_download.lib_dto import MonthlyUpdateDataDecisionCompleteNotificationDTO
-from lib_land_registry_download.lib_dto import MonthlyUpdateDatabaseUpdateCompleteNotificationDTO
+from lib_land_registry_data.lib_dto import MonthlyUpdateDataDecisionCompleteNotificationDTO
+from lib_land_registry_data.lib_dto import MonthlyUpdateDatabaseUpdateCompleteNotificationDTO
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from lib_land_registry_download.lib_db import PricePaidDataMonthlyUpdateFileLog
-from lib_land_registry_download.lib_db import PricePaidData
-from lib_land_registry_download.lib_db import PricePaidDataLog
-from lib_land_registry_download.lib_db import PricePaidDataMonthlyUpdateDatabaseUpdaterOperationLog
+from lib_land_registry_data.lib_db import PricePaidDataMonthlyUpdateFileLog
+from lib_land_registry_data.lib_db import PricePaidData
+from lib_land_registry_data.lib_db import PricePaidDataLog
+from lib_land_registry_data.lib_db import PricePaidDataMonthlyUpdateDatabaseUpdaterOperationLog
 
 import logging
 import sys
 
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER as PROCESS_NAME
-from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER as GROUP_ID
-from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER as CLIENT_ID
-from lib_land_registry_download.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION
-from lib_land_registry_download.lib_constants.process_name import OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION
-from lib_land_registry_download.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE
-from lib_land_registry_download.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER
+from lib_land_registry_data.lib_constants.process_name import PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION
+from lib_land_registry_data.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE
+from lib_land_registry_data.lib_constants.notification_type import DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE
 
 
 event_thead_terminate = threading.Event()
@@ -376,7 +374,7 @@ class PathIsNotAFileError(OSError):
 
 def main():
 
-    log.info(f'process {PROCESS_NAME} started up')
+    log.info(f'process {PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER} started up')
 
     kafka_bootstrap_servers = os.environ['KAFKA_BOOTSTRAP_SERVERS']
     log.info(f'Kafka bootstrap server address: {kafka_bootstrap_servers}')
@@ -384,23 +382,23 @@ def main():
     log.info(
         f'creating Kafka consumer with '
         f'bootstrap_servers={kafka_bootstrap_servers} '
-        f'client_id={CLIENT_ID}, '
-        f'group_id={GROUP_ID}'
+        f'client_id={PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER}, '
+        f'group_id={PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER}'
     )
     consumer = create_consumer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=CLIENT_ID,
-        group_id=GROUP_ID,
+        client_id=PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER,
+        group_id=PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER,
     )
 
     log.info(
         f'creating Kafka producer with '
         f'bootstrap_servers={kafka_bootstrap_servers} '
-        f'client_id={CLIENT_ID}, '
+        f'client_id={PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER}, '
     )
     producer = create_producer(
         bootstrap_servers=kafka_bootstrap_servers,
-        client_id=CLIENT_ID,
+        client_id=PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER,
     )
 
     log.info(f'run main process')
@@ -413,10 +411,10 @@ def run_process(
     producer: Producer,
 ) -> None:
 
-    log.info(f'consumer subscribing to topic {topic_name_land_registry_download_monthly_update_data_decision_notification}')
-    consumer.subscribe([topic_name_land_registry_download_monthly_update_data_decision_notification])
+    log.info(f'consumer subscribing to topic {topic_name_land_registry_data_monthly_update_data_decision_notification}')
+    consumer.subscribe([topic_name_land_registry_data_monthly_update_data_decision_notification])
 
-    consumer_poll_timeout = 10.0
+    consumer_poll_timeout = 5.0
     log.debug(f'consumer poll timeout: {consumer_poll_timeout}')
 
     global exit_flag
@@ -444,84 +442,76 @@ def run_process(
             )
 
             try:
-                notification_source = data_decision_dto.notification_source
+                notification_type = data_decision_dto.notification_type
 
-                if (
-                    notification_source == OLD_PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION or
-                    notification_source == PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATA_DECISION
-                ):
-                    notification_type = data_decision_dto.notification_type
+                if notification_type == DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE:
 
-                    if notification_type == DAILY_DOWNLOAD_MONTHLY_UPDATE_DATA_DECISION_COMPLETE:
+                    thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
+                    thread_handle.start()
 
-                        thread_handle = threading.Thread(target=consumer_poll_loop, args=(consumer,))
-                        thread_handle.start()
+                    filename = data_decision_dto.filename
+                    sha256sum = data_decision_dto.sha256sum
+                    decision = data_decision_dto.data_decision
+                    log.info(f'processing message: filename={filename}, sha256sum={sha256sum}, decision={decision}')
+                    assert len(sha256sum) > 0
 
-                        filename = data_decision_dto.filename
-                        sha256sum = data_decision_dto.sha256sum
-                        decision = data_decision_dto.data_decision
-                        log.info(f'processing message: filename={filename}, sha256sum={sha256sum}, decision={decision}')
-                        assert len(sha256sum) > 0
+                    if decision == 'ignored':
+                        log_message = f'ignoring file {filename}'
+                        log.info(log_message)
 
-                        if decision == 'ignored':
-                            log_message = f'ignoring file {filename}'
-                            log.info(log_message)
+                        notify_ignored(
+                            producer,
+                            filename,
+                            sha256sum=data_decision_dto.sha256sum,
+                            data_decision=data_decision_dto.data_decision,
+                            data_decision_dto=data_decision_dto,
+                        )
 
-                            notify_ignored(
+                    elif decision == 'processed':
+                        log_message = f'processing file {filename}'
+                        log.info(log_message)
+
+                        log.info(f'run_process: database update: filename={filename}')
+
+                        return_value = update_database(filename, file_timestamp=data_decision_dto.timestamp_download)
+
+                        if return_value is None:
+                            pass
+                        else:
+                            (
+                                file_row_count,
+                                file_row_count_insert,
+                                file_row_count_change,
+                                file_row_count_delete,
+                                database_row_count_before,
+                                database_row_count_after,
+                                input_file_statistics,
+                            ) = return_value
+
+                            log.info(f'run_process: database update: filename={filename} [completed]')
+
+                            notify_processed(
                                 producer,
                                 filename,
                                 sha256sum=data_decision_dto.sha256sum,
                                 data_decision=data_decision_dto.data_decision,
+                                file_row_count=file_row_count,
+                                file_row_count_insert=file_row_count_insert,
+                                file_row_count_change=file_row_count_change,
+                                file_row_count_delete=file_row_count_delete,
+                                database_row_count_before=database_row_count_before,
+                                database_row_count_after=database_row_count_after,
                                 data_decision_dto=data_decision_dto,
                             )
 
-                        elif decision == 'processed':
-                            log_message = f'processing file {filename}'
-                            log.info(log_message)
+                    event_thead_terminate.set()
+                    thread_handle.join()
+                    log.debug(f'consumer commit offset={message.offset()}')
+                    consumer.commit()
+                    event_thead_terminate.clear()
 
-                            log.info(f'run_process: database update: filename={filename}')
-
-                            return_value = update_database(filename, file_timestamp=data_decision_dto.timestamp_download)
-
-                            if return_value is None:
-                                pass
-                            else:
-                                (
-                                    file_row_count,
-                                    file_row_count_insert,
-                                    file_row_count_change,
-                                    file_row_count_delete,
-                                    database_row_count_before,
-                                    database_row_count_after,
-                                    input_file_statistics,
-                                ) = return_value
-
-                                log.info(f'run_process: database update: filename={filename} [completed]')
-
-                                notify_processed(
-                                    producer,
-                                    filename,
-                                    sha256sum=data_decision_dto.sha256sum,
-                                    data_decision=data_decision_dto.data_decision,
-                                    file_row_count=file_row_count,
-                                    file_row_count_insert=file_row_count_insert,
-                                    file_row_count_change=file_row_count_change,
-                                    file_row_count_delete=file_row_count_delete,
-                                    database_row_count_before=database_row_count_before,
-                                    database_row_count_after=database_row_count_after,
-                                    data_decision_dto=data_decision_dto,
-                                )
-
-                        event_thead_terminate.set()
-                        thread_handle.join()
-                        log.debug(f'consumer commit offset={message.offset()}')
-                        consumer.commit()
-                        event_thead_terminate.clear()
-
-                    else:
-                        log.error(f'unknown notification type: {notification_type}')
                 else:
-                    log.error(f'unknown notification source: {notification_source}')
+                    log.error(f'unknown notification type: {notification_type}')
 
             except Exception as exception:
                 log.error(f'{exception}')
@@ -559,7 +549,7 @@ def notify_ignored(
     now = datetime.now(timezone.utc)
 
     dto = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
-        notification_source=PROCESS_NAME,
+        notification_source=PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER,
         notification_type=DAILY_DOWNLOAD_MONTHLY_UPDATE_DATABASE_UPDATE_COMPLETE,
         timestamp=now,
         filename=filename,
@@ -581,7 +571,7 @@ def notify_ignored(
     document_json_str = jsons.dumps(dto)
 
     producer.produce(
-        topic=topic_name_land_registry_download_monthly_update_database_updater_notification,
+        topic=topic_name_land_registry_data_monthly_update_database_updater_notification,
         key=f'no_key',
         value=document_json_str,
     )
@@ -605,7 +595,7 @@ def notify_processed(
     now = datetime.now(timezone.utc)
 
     database_update_complete_notification_dto = MonthlyUpdateDatabaseUpdateCompleteNotificationDTO(
-        notification_source=PROCESS_NAME,
+        notification_source=PROCESS_NAME_LAND_REGISTRY_MONTHLY_UPDATE_DATABASE_UPDATER,
         notification_type='daily_download_monthly_update_database_update_complete',
         timestamp=now,
         filename=filename,
@@ -627,7 +617,7 @@ def notify_processed(
     document_json_str = jsons.dumps(database_update_complete_notification_dto)
 
     producer.produce(
-        topic=topic_name_land_registry_download_monthly_update_database_updater_notification,
+        topic=topic_name_land_registry_data_monthly_update_database_updater_notification,
         key=f'no_key',
         value=document_json_str,
     )
@@ -853,11 +843,6 @@ def db_undelete_row(
 #         return True
 
 
-def get_file_path(filename: str) -> str:
-    data_directory = '/data-land-registry/pp-monthly-update'
-    return f'{data_directory}/{filename}'
-
-
 def update_database(
     filename: str,
     file_timestamp: datetime,
@@ -896,7 +881,7 @@ def update_database(
                 return None
             else:
                 # load data from file
-                file_path = get_file_path(filename)
+                file_path = get_file_path_pp_monthly_update(filename)
                 log.info(f'update_database: filename={filename}')
 
                 if not os.path.exists(file_path):
@@ -1180,5 +1165,6 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, ctrl_c_signal_handler)
     signal.signal(signal.SIGTERM, sigterm_signal_handler)
     main()
+    logger.info(f'process exit')
 
 

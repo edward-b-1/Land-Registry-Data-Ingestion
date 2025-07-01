@@ -1,0 +1,133 @@
+
+name: land-registry-data-project
+
+services:
+    land_registry_cron_trigger:
+        container_name: land_registry_cron_trigger
+        image: land-registry-data-ingestion/land_registry_cron_trigger:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_cron_trigger/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_monthly_update_download_service:
+        container_name: land_registry_pp_monthly_update_download_service
+        image: land-registry-data-ingestion/land_registry_pp_monthly_update_download_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_monthly_update_download_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_complete_download_service:
+        container_name: land_registry_pp_complete_download_service
+        image: land-registry-data-ingestion/land_registry_pp_complete_download_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_download_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 40G
+
+    land_registry_pp_monthly_update_data_decision_service:
+        container_name: land_registry_pp_monthly_update_data_decision_service
+        image: land-registry-data-ingestion/land_registry_pp_monthly_update_data_decision_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_monthly_update_data_decision_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_complete_data_decision_service:
+        container_name: land_registry_pp_complete_data_decision_service
+        image: land-registry-data-ingestion/land_registry_pp_complete_data_decision_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_data_decision_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_monthly_update_gc_service:
+        container_name: land_registry_pp_monthly_update_gc_service
+        image: land-registry-data-ingestion/land_registry_pp_monthly_update_gc_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_monthly_update_gc_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_complete_gc_service:
+        container_name: land_registry_pp_complete_gc_service
+        image: land-registry-data-ingestion/land_registry_pp_complete_gc_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_gc_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_monthly_update_archive_service:
+        container_name: land_registry_pp_monthly_update_archive_service
+        image: land-registry-data-ingestion/land_registry_pp_monthly_update_archive_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_monthly_update_archive_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 10G
+
+    land_registry_pp_complete_archive_service:
+        container_name: land_registry_pp_complete_archive_service
+        image: land-registry-data-ingestion/land_registry_pp_complete_archive_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_archive_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 20G
+
+    land_registry_pp_complete_db_upload_service:
+        container_name: land_registry_pp_complete_db_upload_service
+        image: land-registry-data-ingestion/land_registry_pp_complete_db_upload_service:latest
+        env_file: "./config/land_registry_data.env"
+        build:
+            context: .
+            dockerfile: ./docker/land_registry_pp_complete_db_upload_service/Dockerfile
+        restart: no
+        deploy:
+            resources:
+                limits:
+                    memory: 30G
